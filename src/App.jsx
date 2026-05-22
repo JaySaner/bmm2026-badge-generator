@@ -493,10 +493,11 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
     canvas.height = H;
 
     const img = new Image();
+    const logoImg = new Image();
     let imagesLoaded = 0;
     const checkDraw = () => {
       imagesLoaded++;
-      if (imagesLoaded === 1) {
+      if (imagesLoaded === 2) {
         document.fonts.ready.then(() => {
           draw();
         });
@@ -507,73 +508,20 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
     img.onerror = checkDraw;
     img.src = photo;
 
-    const drawSeattleSkyline = (ctx, x, y, w, h, color) => {
-      ctx.save();
-      ctx.fillStyle = color || 'rgba(0, 102, 102, 0.08)';
-      
-      // Building silhouettes
-      ctx.beginPath();
-      // Block 1
-      ctx.rect(x + w*0.05, y - h*0.35, w*0.06, h*0.35);
-      // Block 2
-      ctx.rect(x + w*0.13, y - h*0.5, w*0.08, h*0.5);
-      // Columbia Center (Seattle stepped tiers)
-      ctx.rect(x + w*0.23, y - h*0.7, w*0.11, h*0.7);
-      ctx.rect(x + w*0.25, y - h*0.77, w*0.07, h*0.07);
-      ctx.rect(x + w*0.27, y - h*0.83, w*0.03, h*0.06);
-      // Block 4
-      ctx.rect(x + w*0.36, y - h*0.42, w*0.07, h*0.42);
-      // Block 5
-      ctx.rect(x + w*0.45, y - h*0.55, w*0.08, h*0.55);
-      ctx.fill();
-      
-      // Space Needle (at w*0.58)
-      const snX = x + w * 0.58;
-      const snW = w * 0.12;
-      
-      // Legs
-      ctx.beginPath();
-      ctx.moveTo(snX - snW*0.12, y);
-      ctx.quadraticCurveTo(snX - snW*0.06, y - h*0.4, snX - snW*0.03, y - h*0.6);
-      ctx.lineTo(snX + snW*0.03, y - h*0.6);
-      ctx.quadraticCurveTo(snX + snW*0.06, y - h*0.4, snX + snW*0.12, y);
-      ctx.closePath();
-      ctx.fill();
-      
-      // Core
-      ctx.fillRect(snX - snW*0.02, y - h*0.65, snW*0.04, h*0.65);
-      
-      // Saucer
-      ctx.beginPath();
-      ctx.ellipse(snX, y - h*0.62, snW * 0.35, h * 0.03, 0, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Upper Top
-      ctx.beginPath();
-      ctx.ellipse(snX, y - h*0.65, snW * 0.2, h * 0.02, 0, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Spire
-      ctx.beginPath();
-      ctx.moveTo(snX, y - h*0.65);
-      ctx.lineTo(snX, y - h*0.82);
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = color;
-      ctx.stroke();
-      
-      ctx.restore();
-    };
+    logoImg.onload = checkDraw;
+    logoImg.onerror = checkDraw;
+    logoImg.src = '/logo.png';
 
     const draw = () => {
       ctx.clearRect(0, 0, W, H);
 
-      // Background - Warm Cream
-      ctx.fillStyle = '#FFF8F2';
+      // Background - White
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, W, H);
 
       // Subtle dot pattern
-      ctx.fillStyle = '#006666';
-      ctx.globalAlpha = 0.03;
+      ctx.fillStyle = '#000000';
+      ctx.globalAlpha = 0.02;
       for (let x = 0; x < W; x += 30) {
         for (let y = 0; y < H; y += 30) {
           ctx.beginPath();
@@ -583,48 +531,42 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
       }
       ctx.globalAlpha = 1.0;
 
-      // Top Bhagawa Accent Bar
-      ctx.fillStyle = '#C06000';
-      ctx.fillRect(0, 0, W, 12);
-
-      // Seattle Skyline vector backdrop in the middle section (Sitting subtly in the background)
-      drawSeattleSkyline(ctx, 0, 780, W, 220, 'rgba(0, 102, 102, 0.06)');
-
       // Header Section
-      ctx.textAlign = 'center';
-      ctx.font = '900 48px Poppins, sans-serif';
-      ctx.fillStyle = '#004747'; // deep teal
-      ctx.fillText('BMM CONVENTION 2026', W / 2, 90);
+      if (logoImg.width > 0) {
+        const processedLogo = removeLogoBackground(logoImg);
+        ctx.drawImage(processedLogo, 40, 30, 130, 130 * (logoImg.height / logoImg.width));
+      }
 
-      ctx.font = '600 24px Inter, sans-serif';
-      ctx.fillStyle = '#C06000'; // burnt saffron
-      ctx.fillText('AUGUST 6-9, 2026  •  SEATTLE CONVENTION CENTER', W / 2, 140);
+      ctx.textAlign = 'left';
+      ctx.font = '900 48px Poppins, sans-serif';
+      ctx.fillStyle = '#0A1F5C'; // dark blue
+      ctx.fillText('BMM CONVENTION 2026', 220, 90);
 
       ctx.textAlign = 'right';
       ctx.font = 'bold 28px Inter, sans-serif';
-      ctx.fillStyle = '#006666';
+      ctx.fillStyle = '#00664F'; // green
       ctx.fillText('#BMM2026', W - 40, 90);
 
+      ctx.textAlign = 'left';
+      ctx.font = '600 24px Inter, sans-serif';
+      ctx.fillStyle = '#E55934'; // orange
+      ctx.fillText('AUGUST 6-9, 2026  •  SEATTLE CONVENTION CENTER', 220, 140);
+
       // Divider line
-      ctx.strokeStyle = 'rgba(0, 102, 102, 0.1)';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(W / 2 - 350, 175);
-      ctx.lineTo(W / 2 + 350, 175);
+      ctx.moveTo(190, 175);
+      ctx.lineTo(W - 40, 175);
       ctx.stroke();
 
       // Middle Section - Left (Photo)
-      const cx = 310, cy = 500, r = 230;
+      const cx = 310, cy = 470, r = 230;
 
-      // Abstract shapes behind photo
-      ctx.beginPath();
-      ctx.arc(cx, cy, r + 20, 0, Math.PI * 2);
-      ctx.fillStyle = '#FFEBD6'; // light peach
-      ctx.fill();
-
+      // Outer orange arc
       ctx.beginPath();
       ctx.arc(cx, cy, r + 20, -Math.PI / 2, Math.PI * 0.8);
-      ctx.strokeStyle = '#F37021'; // vibrant saffron border
+      ctx.strokeStyle = '#E55934'; // orange
       ctx.lineWidth = 8;
       ctx.stroke();
 
@@ -651,7 +593,7 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
         }
         ctx.drawImage(img, sx, sy, sw, sh, cx - r, cy - r, r * 2, r * 2);
       } else {
-        ctx.fillStyle = '#FFEBD6';
+        ctx.fillStyle = '#F0F4F8';
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
       }
       ctx.restore();
@@ -659,7 +601,7 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
       // Inner gold border for photo
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = '#D4AF37';
+      ctx.strokeStyle = '#D4AF37'; // gold
       ctx.lineWidth = 5;
       ctx.stroke();
 
@@ -668,58 +610,58 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
       const tx = 590;
 
       ctx.font = '900 38px Poppins, sans-serif';
-      ctx.fillStyle = '#C06000';
-      ctx.fillText('JOIN ME AT THE', tx, 400);
+      ctx.fillStyle = '#E55934';
+      ctx.fillText('JOIN ME AT THE', tx, 380);
 
       ctx.font = '900 42px Poppins, sans-serif';
-      ctx.fillStyle = '#004747'; // deep teal
-      ctx.fillText('BIGGEST', tx, 470);
+      ctx.fillStyle = '#0A1F5C'; // dark blue
+      ctx.fillText('BIGGEST', tx, 450);
       let w1 = ctx.measureText('BIGGEST ').width;
-      ctx.fillStyle = '#D4AF37';
-      ctx.fillText('MARATHI', tx + w1, 470);
+      ctx.fillStyle = '#D4AF37'; // gold
+      ctx.fillText('MARATHI', tx + w1, 450);
 
-      ctx.fillStyle = '#004747';
-      ctx.fillText('GATHERING IN', tx, 540);
-      ctx.fillText('NORTH AMERICA.', tx, 610);
+      ctx.fillStyle = '#0A1F5C';
+      ctx.fillText('GATHERING IN', tx, 520);
+      ctx.fillText('NORTH AMERICA.', tx, 590);
 
       // Line separator
-      ctx.fillStyle = '#F37021';
-      ctx.fillRect(tx, 655, 100, 6);
+      ctx.fillStyle = '#E55934';
+      ctx.fillRect(tx, 635, 100, 6);
 
       // Name & Details
       ctx.font = '900 40px Poppins, sans-serif';
-      ctx.fillStyle = '#C06000';
-      ctx.fillText(name.toUpperCase(), tx, 712);
+      ctx.fillStyle = '#E55934';
+      ctx.fillText(name.toUpperCase(), tx, 692);
 
       if (city) {
         ctx.font = '600 22px Inter, sans-serif';
-        ctx.fillStyle = '#7C6E63'; // warm muted brown-gray
-        ctx.fillText(`${city}`.toUpperCase(), tx, 755);
+        ctx.fillStyle = '#555555'; // dark grey
+        ctx.fillText(city.toUpperCase(), tx, 735);
       }
 
       // ─── 1. Tagline Area (Sit between Name/City section and Stats Bar) ───
       const taglineBgY = 780;
       const taglineBgH = 80;
-      ctx.fillStyle = '#FFEBD6'; // soft light peach/saffron
+      ctx.fillStyle = '#F0F4F8'; // light blue/grey
       ctx.fillRect(0, taglineBgY, W, taglineBgH);
 
       // Draw Tagline Text
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = 'bold 30px "Noto Sans Devanagari", sans-serif';
-      ctx.fillStyle = '#004747'; // deep teal
+      ctx.fillStyle = '#0A1F5C'; // dark blue
       ctx.fillText('जपूया संस्कृती, विणूया नाती!', W / 2, taglineBgY + taglineBgH / 2);
       ctx.textBaseline = 'alphabetic'; // reset
 
       // ─── 2. Bottom Stats Bar ──────────────────────────────────────────────
       const statsY = 860;
       const statsH = 130;
-      const colors = ['#C06000', '#004747', '#006666', '#D4AF37', '#8A0F0F'];
+      const colors = ['#E55934', '#0A1F5C', '#00664F', '#D4AF37', '#E55934'];
       const stats = [
-        { n: '10,000+', t: 'Attendees' },
-        { n: '60+', t: 'Mandals' },
+        { n: '2,500+', t: 'Attendees' },
+        { n: '54+', t: 'Mandals' },
         { n: '100+', t: 'Performances' },
-        { n: '10+', t: 'Competitions' },
+        { n: '10', t: 'Competitions' },
         { n: '22nd', t: 'Convention' }
       ];
 
@@ -734,14 +676,14 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
         ctx.fillText(stats[i].n, i * bw + bw / 2, statsY + 65);
 
         ctx.font = '500 18px Inter, sans-serif';
-        ctx.fillStyle = '#FFE28A'; // light gold label text
+        ctx.fillStyle = '#ffffff'; 
         ctx.fillText(stats[i].t, i * bw + bw / 2, statsY + 98);
       }
 
       // ─── 3. Social Media & Website Strip (Absolute Last Footer) ──────────
       const barY = 990;
       const barH = 90;
-      ctx.fillStyle = '#003B3B'; // ultra deep teal
+      ctx.fillStyle = '#051036'; // very dark blue
       ctx.fillRect(0, barY, W, barH);
 
       const barCy = barY + barH / 2;
@@ -775,8 +717,8 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
       // Right side: 3 social icons + shared handle
       ctx.textAlign = 'right';
       ctx.font = '600 18px Inter, sans-serif';
-      ctx.fillStyle = '#D4AF37';
-      const handleText = '/BMM2026Seattle';
+      ctx.fillStyle = '#D4AF37'; // gold
+      const handleText = '/BMMSeattle2026';
       const handleW = ctx.measureText(handleText).width;
       const handleX = W - 40;
       ctx.fillText(handleText, handleX, barCy + 1);

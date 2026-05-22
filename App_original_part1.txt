@@ -1,0 +1,98 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Download, Upload, User, MapPin, Briefcase, Share2, ArrowLeft, LayoutDashboard, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import html2canvas from 'html2canvas';
+import { QRCodeSVG } from 'qrcode.react';
+import confetti from 'canvas-confetti';
+
+// Helper to remove solid background color of the logo dynamically (chroma-keying the top-left pixel)
+const removeLogoBackground = (img) => {
+  if (!img || img.width === 0) return img;
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+
+  const imgData = ctx.getImageData(0, 0, img.width, img.height);
+  const data = imgData.data;
+
+  // Sample top-left corner pixel as background color
+  const bgR = data[0];
+  const bgG = data[1];
+  const bgB = data[2];
+  const bgA = data[3];
+
+  // If corner is already transparent, no need to key it out
+  if (bgA < 10) return img;
+
+  // Tolerance for keying out similar colors
+  const tolerance = 45;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const a = data[i + 3];
+
+    // Check Euclidean distance in RGB color space
+    const dist = Math.sqrt(
+      (r - bgR) ** 2 +
+      (g - bgG) ** 2 +
+      (b - bgB) ** 2
+    );
+
+    if (
+<truncated 25929 bytes>
+, []);
+
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setFormData(f => ({ ...f, photo: reader.result }));
+    reader.readAsDataURL(file);
+  };
+
+  const handleGroupPhotoUpload = (e, index) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setGroupFormData(f => {
+        const newPhotos = [...f.photos];
+        newPhotos[index] = reader.result;
+        return { ...f, photos: newPhotos };
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleGenerate = () => {
+    if (!formData.name || !formData.photo) {
+      alert('Please enter your name and upload a photo!');
+      return;
+    }
+    setIsGenerating(true);
+    setTimeout(() => {
+      const newReg = {
+        ...formData,
+        id: `BMM26-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toLocaleDateString()
+      };
+      const updated = [newReg, ...registrations];
+      setRegistrations(updated);
+      localStorage.setItem('bmm_registrations', JSON.stringify(updated));
+      setIsGenerating(false);
+      setStep('preview');
+      confetti({ particleCount: 160, spread: 80, origin: { y: 0.55 }, colors: ['#D4AF37', '#0a1f5c', '#FF9933'] });
+    }, 1800);
+  };
+
+  const handleGenerateGroup = () => {
+    const uploadedPhotosCount = groupFormData.photos.slice(0, groupFormData.memberCount).filter(p => p).length;
+    if (!groupFormData.groupName) {
+      alert('Please enter a group/mandal name!');
+      return;
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
