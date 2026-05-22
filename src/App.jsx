@@ -1,39 +1,874 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Download, 
-  Printer, 
-  Share2, 
-  Upload, 
-  User, 
-  MapPin, 
-  Briefcase, 
-  Ticket, 
-  CheckCircle2, 
-  Trash2, 
-  LayoutDashboard,
-  ArrowLeft,
-  QrCode
-} from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Download, Upload, User, MapPin, Briefcase, Share2, ArrowLeft, LayoutDashboard, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
 
+// Helper to remove solid background color of the logo dynamically (chroma-keying the top-left pixel)
+const removeLogoBackground = (img) => {
+  if (!img || img.width === 0) return img;
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+
+  const imgData = ctx.getImageData(0, 0, img.width, img.height);
+  const data = imgData.data;
+
+  // Sample top-left corner pixel as background color
+  const bgR = data[0];
+  const bgG = data[1];
+  const bgB = data[2];
+  const bgA = data[3];
+
+  // If corner is already transparent, no need to key it out
+  if (bgA < 10) return img;
+
+  // Tolerance for keying out similar colors
+  const tolerance = 45;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const a = data[i + 3];
+
+    // Check Euclidean distance in RGB color space
+    const dist = Math.sqrt(
+      (r - bgR) ** 2 +
+      (g - bgG) ** 2 +
+      (b - bgB) ** 2
+    );
+
+    if (dist < tolerance) {
+      data[i + 3] = 0; // Make transparent
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+  return canvas;
+};
+
+// ─── Group Collage Canvas Renderer ────────────────────────────────────────────
+const GroupCollageCanvas = ({ photos, memberCount, groupName, city, canvasRef }) => {
+  useEffect(() => {
+    if (!photos || photos.filter(p => p).length === 0 || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const SIZE = 800;
+    canvas.width = SIZE;
+    canvas.height = SIZE;
+
+    // Load member images
+    const loadedImages = [];
+    const photosToLoad = photos.slice(0, memberCount);
+    const totalImagesToLoad = photosToLoad.filter(p => p).length;
+
+    let imagesLoaded = 0;
+    const checkAllLoaded = () => {
+      imagesLoaded++;
+      if (imagesLoaded === totalImagesToLoad) {
+        document.fonts.ready.then(() => {
+          draw();
+        });
+      }
+    };
+
+    photosToLoad.forEach((photoData, index) => {
+      if (!photoData) {
+        loadedImages[index] = null;
+        checkAllLoaded();
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        loadedImages[index] = img;
+        checkAllLoaded();
+      };
+      img.onerror = () => {
+        loadedImages[index] = null;
+        checkAllLoaded();
+      };
+      img.src = photoData;
+    });
+
+    const draw = () => {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, SIZE, SIZE);
+
+      const cx = SIZE / 2;
+      const cy = SIZE / 2;
+      const r = SIZE / 2 - 20;
+
+      // ─── 1. DRAW COLLAGE PHOTOS (Clipped to main circle) ───
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.clip();
+
+      const drawCenterCropped = (img, tx, ty, tw, th) => {
+        if (!img) {
+          ctx.fillStyle = '#FFF3E8';
+          ctx.fillRect(tx, ty, tw, th);
+          return;
+        }
+        const imgRatio = img.width / img.height;
+        const targetRatio = tw / th;
+        let sx, sy, sw, sh;
+
+        if (imgRatio > targetRatio) {
+          sh = img.height;
+          sw = img.height * targetRatio;
+          sx = (img.width - sw) / 2;
+          sy = 0;
+        } else {
+          sw = img.width;
+          sh = img.width / targetRatio;
+          sx = 0;
+          sy = (img.height - sh) / 2;
+        }
+        ctx.drawImage(img, sx, sy, sw, sh, tx, ty, tw, th);
+      };
+
+      if (memberCount === 2) {
+        // 2 Members (Left / Right vertical split)
+        drawCenterCropped(loadedImages[0], 0, 0, cx, SIZE);
+        drawCenterCropped(loadedImages[1], cx, 0, cx, SIZE);
+
+        // Gold Divider Line
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, SIZE);
+        ctx.strokeStyle = '#D4AF37';
+        ctx.lineWidth = 8;
+        ctx.stroke();
+
+      } else if (memberCount === 3) {
+        // 3 Members (Top half, Bottom Left, Bottom Right)
+        drawCenterCropped(loadedImages[0], 0, 0, SIZE, cy);
+        drawCenterCropped(loadedImages[1], 0, cy, cx, cy);
+        drawCenterCropped(loadedImages[2], cx, cy, cx, cy);
+
+        // Gold Divider Lines
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        ctx.lineTo(SIZE, cy);
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx, SIZE);
+        ctx.strokeStyle = '#D4AF37';
+        ctx.lineWidth = 8;
+        ctx.stroke();
+
+      } else {
+        // 4 Members (2x2 Quadrants)
+        drawCenterCropped(loadedImages[0], 0, 0, cx, cy);
+        drawCenterCropped(loadedImages[1], cx, 0, cx, cy);
+        drawCenterCropped(loadedImages[2], 0, cy, cx, cy);
+        drawCenterCropped(loadedImages[3], cx, cy, cx, cy);
+
+        // Gold Divider Lines (Cross)
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        ctx.lineTo(SIZE, cy);
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, SIZE);
+        ctx.strokeStyle = '#D4AF37';
+        ctx.lineWidth = 8;
+        ctx.stroke();
+      }
+
+      ctx.restore(); // Restore outer circle clip
+
+      // ─── 2. BOTTOM SAFFRON WAVY BANNER ───
+      ctx.save();
+      // Keep inside main circular DP boundary
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.clip();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy + r * 0.45);
+      ctx.bezierCurveTo(cx - r * 0.5, cy + r * 0.35, cx + r * 0.3, cy + r * 0.75, cx + r, cy + r * 0.55);
+      ctx.lineTo(cx + r, cy + r);
+      ctx.lineTo(cx - r, cy + r);
+      ctx.closePath();
+
+      const bannerGrad = ctx.createLinearGradient(cx - r, cy + r * 0.4, cx + r, cy + r);
+      bannerGrad.addColorStop(0, '#C06000'); // deep burnt saffron
+      bannerGrad.addColorStop(0.5, '#F37021'); // vibrant saffron
+      bannerGrad.addColorStop(1, '#D4AF37'); // elegant gold
+      ctx.fillStyle = bannerGrad;
+      ctx.fill();
+
+      // Golden accent curve line
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy + r * 0.45);
+      ctx.bezierCurveTo(cx - r * 0.5, cy + r * 0.35, cx + r * 0.3, cy + r * 0.75, cx + r, cy + r * 0.55);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+      ctx.strokeStyle = '#D4AF37';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Ribbon details: Show Group Name and Seattle WA.
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+      ctx.shadowBlur = 4;
+      ctx.font = 'bold 24px Poppins, sans-serif';
+      ctx.fillText(groupName.toUpperCase(), cx + 80, cy + r * 0.72);
+      
+      ctx.font = '600 18px Inter, sans-serif';
+      ctx.fillStyle = '#FFE28A';
+      ctx.fillText(`BMM 2026 · SEATTLE${city ? ' · ' + city.toUpperCase() : ''}`, cx + 80, cy + r * 0.84);
+      ctx.restore();
+
+      // ─── 3. DYNAMIC PLURAL MARATHI BADGE (Bottom Left) ───
+      const bx = cx - r * 0.44;
+      const by = cy + r * 0.35;
+      const br = 106;
+
+      ctx.save();
+      // Outer white outline border
+      ctx.beginPath();
+      ctx.arc(bx, by, br + 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#D4AF37';
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+
+      // Deep Burnt Saffron Badge Circle
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      const badgeGrad = ctx.createLinearGradient(bx - br, by - br, bx + br, by + br);
+      badgeGrad.addColorStop(0, '#B54D00');
+      badgeGrad.addColorStop(1, '#8A0F0F');
+      ctx.fillStyle = badgeGrad;
+      ctx.fill();
+
+      // Inner thin gold border ring
+      ctx.beginPath();
+      ctx.arc(bx, by, br - 7, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 226, 138, 0.85)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Write Marathi Plural text
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+
+      ctx.font = 'bold 23px "Noto Sans Devanagari", sans-serif';
+      ctx.fillText('आम्ही जातोय', bx, by - 32);
+
+      ctx.font = 'bold 23px "Noto Sans Devanagari", sans-serif';
+      ctx.fillText('अधिवेशनाला', bx, by);
+
+      ctx.font = 'bold 17px "Noto Sans Devanagari", sans-serif';
+      ctx.fillStyle = '#FFE28A'; // gold text
+      ctx.fillText('तुम्ही पण येताय ना?', bx, by + 34);
+      ctx.restore();
+
+      // ─── 4. ELEGANT GOLD OUTER FRAME RINGS ───
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = '#D4AF37';
+      ctx.lineWidth = 8;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - 4, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    };
+  }, [photos, memberCount, groupName, city]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: '100%', maxWidth: '280px', display: 'block', margin: '0 auto', borderRadius: '50%', border: '2px solid #ddd' }}
+    />
+  );
+};
+
+// ─── WhatsApp DP Canvas (Perfect Circle Crop) ─────────────────────────
+const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
+  useEffect(() => {
+    if (!photo || !dpRef.current) return;
+    const canvas = dpRef.current;
+    const ctx = canvas.getContext('2d');
+    const SIZE = 800; // High res
+    canvas.width = SIZE;
+    canvas.height = SIZE;
+
+    const img = new Image();
+
+    img.onload = () => {
+      document.fonts.ready.then(() => {
+        draw();
+      });
+    };
+    img.onerror = () => {
+      document.fonts.ready.then(() => {
+        draw();
+      });
+    };
+    img.src = photo;
+
+    const draw = () => {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, SIZE, SIZE);
+
+      const cx = SIZE / 2, cy = SIZE / 2, r = SIZE / 2 - 20;
+
+      // ─── 1. DRAW PHOTO (Clipped to main circle) ───
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.clip();
+      
+      // Center cropped draw
+      if (img.width > 0) {
+        const imgRatio = img.width / img.height;
+        const targetRatio = 1;
+        let sx, sy, sw, sh;
+        if (imgRatio > targetRatio) {
+          sh = img.height;
+          sw = img.height * targetRatio;
+          sx = (img.width - sw) / 2;
+          sy = 0;
+        } else {
+          sw = img.width;
+          sh = img.width / targetRatio;
+          sx = 0;
+          sy = (img.height - sh) / 2;
+        }
+        ctx.drawImage(img, sx, sy, sw, sh, cx - r, cy - r, r * 2, r * 2);
+      } else {
+        // Fallback color
+        ctx.fillStyle = '#FFF3E8';
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
+
+      ctx.restore();
+
+      // ─── 2. BOTTOM SAFFRON WAVY BANNER ───
+      ctx.save();
+      // Keep inside main circular DP boundary
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.clip();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy + r * 0.45);
+      ctx.bezierCurveTo(cx - r * 0.5, cy + r * 0.35, cx + r * 0.3, cy + r * 0.75, cx + r, cy + r * 0.55);
+      ctx.lineTo(cx + r, cy + r);
+      ctx.lineTo(cx - r, cy + r);
+      ctx.closePath();
+
+      const bannerGrad = ctx.createLinearGradient(cx - r, cy + r * 0.4, cx + r, cy + r);
+      bannerGrad.addColorStop(0, '#C06000'); // deep burnt saffron
+      bannerGrad.addColorStop(0.5, '#F37021'); // vibrant saffron
+      bannerGrad.addColorStop(1, '#D4AF37'); // elegant gold
+      ctx.fillStyle = bannerGrad;
+      ctx.fill();
+
+      // Golden accent curve line
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy + r * 0.45);
+      ctx.bezierCurveTo(cx - r * 0.5, cy + r * 0.35, cx + r * 0.3, cy + r * 0.75, cx + r, cy + r * 0.55);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+      ctx.strokeStyle = '#D4AF37';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Ribbon details
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+      ctx.shadowBlur = 4;
+      ctx.font = 'bold 24px Poppins, sans-serif';
+      ctx.fillText('BMM 2026 · SEATTLE, WA.', cx + 80, cy + r * 0.72);
+      
+      ctx.font = '600 18px Inter, sans-serif';
+      ctx.fillStyle = '#FFE28A';
+      ctx.fillText('AUGUST 6–9, 2026', cx + 80, cy + r * 0.84);
+      ctx.restore();
+
+      // ─── 3. DYNAMIC GENDER MARATHI BADGE (Bottom Left) ───
+      const bx = cx - r * 0.44;
+      const by = cy + r * 0.35;
+      const br = 106;
+
+      ctx.save();
+      // Outer white outline border
+      ctx.beginPath();
+      ctx.arc(bx, by, br + 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#D4AF37';
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+
+      // Deep Burnt Saffron Badge Circle
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      const badgeGrad = ctx.createLinearGradient(bx - br, by - br, bx + br, by + br);
+      badgeGrad.addColorStop(0, '#B54D00'); // rich orange-red
+      badgeGrad.addColorStop(1, '#8A0F0F'); // deep crimson red
+      ctx.fillStyle = badgeGrad;
+      ctx.fill();
+
+      // Inner thin gold border ring
+      ctx.beginPath();
+      ctx.arc(bx, by, br - 7, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 226, 138, 0.85)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Write Marathi Gender text
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+
+      let textLine1 = 'मी जातेय'; // default female
+      if (gender === 'male') {
+        textLine1 = 'मी जातोय';
+      } else if (gender === 'plural') {
+        textLine1 = 'आम्ही जातोय';
+      }
+
+      ctx.font = 'bold 23px "Noto Sans Devanagari", sans-serif';
+      ctx.fillText(textLine1, bx, by - 32);
+
+      ctx.font = 'bold 23px "Noto Sans Devanagari", sans-serif';
+      ctx.fillText('अधिवेशनाला', bx, by);
+
+      ctx.font = 'bold 17px "Noto Sans Devanagari", sans-serif';
+      ctx.fillStyle = '#FFE28A'; // gold text
+      ctx.fillText('तुम्ही पण येताय ना?', bx, by + 34);
+      ctx.restore();
+
+      // ─── 4. ELEGANT GOLD OUTER FRAME RINGS ───
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = '#D4AF37';
+      ctx.lineWidth = 8;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - 4, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    };
+  }, [photo, name, gender]);
+
+  return (
+    <canvas
+      ref={dpRef}
+      style={{ width: '100%', maxWidth: '300px', display: 'block', margin: '0 auto', borderRadius: '50%', boxShadow: '0 8px 30px rgba(0,102,102,0.15)' }}
+    />
+  );
+};
+
+// ─── Social Poster (1:1 for Instagram) ───────────────────────────────────────
+const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
+  useEffect(() => {
+    if (!photo || !posterRef.current) return;
+    const canvas = posterRef.current;
+    const ctx = canvas.getContext('2d');
+    const W = 1080, H = 1080;
+    canvas.width = W;
+    canvas.height = H;
+
+    const img = new Image();
+    let imagesLoaded = 0;
+    const checkDraw = () => {
+      imagesLoaded++;
+      if (imagesLoaded === 1) {
+        document.fonts.ready.then(() => {
+          draw();
+        });
+      }
+    };
+
+    img.onload = checkDraw;
+    img.onerror = checkDraw;
+    img.src = photo;
+
+    const drawSeattleSkyline = (ctx, x, y, w, h, color) => {
+      ctx.save();
+      ctx.fillStyle = color || 'rgba(0, 102, 102, 0.08)';
+      
+      // Building silhouettes
+      ctx.beginPath();
+      // Block 1
+      ctx.rect(x + w*0.05, y - h*0.35, w*0.06, h*0.35);
+      // Block 2
+      ctx.rect(x + w*0.13, y - h*0.5, w*0.08, h*0.5);
+      // Columbia Center (Seattle stepped tiers)
+      ctx.rect(x + w*0.23, y - h*0.7, w*0.11, h*0.7);
+      ctx.rect(x + w*0.25, y - h*0.77, w*0.07, h*0.07);
+      ctx.rect(x + w*0.27, y - h*0.83, w*0.03, h*0.06);
+      // Block 4
+      ctx.rect(x + w*0.36, y - h*0.42, w*0.07, h*0.42);
+      // Block 5
+      ctx.rect(x + w*0.45, y - h*0.55, w*0.08, h*0.55);
+      ctx.fill();
+      
+      // Space Needle (at w*0.58)
+      const snX = x + w * 0.58;
+      const snW = w * 0.12;
+      
+      // Legs
+      ctx.beginPath();
+      ctx.moveTo(snX - snW*0.12, y);
+      ctx.quadraticCurveTo(snX - snW*0.06, y - h*0.4, snX - snW*0.03, y - h*0.6);
+      ctx.lineTo(snX + snW*0.03, y - h*0.6);
+      ctx.quadraticCurveTo(snX + snW*0.06, y - h*0.4, snX + snW*0.12, y);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Core
+      ctx.fillRect(snX - snW*0.02, y - h*0.65, snW*0.04, h*0.65);
+      
+      // Saucer
+      ctx.beginPath();
+      ctx.ellipse(snX, y - h*0.62, snW * 0.35, h * 0.03, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Upper Top
+      ctx.beginPath();
+      ctx.ellipse(snX, y - h*0.65, snW * 0.2, h * 0.02, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Spire
+      ctx.beginPath();
+      ctx.moveTo(snX, y - h*0.65);
+      ctx.lineTo(snX, y - h*0.82);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      
+      ctx.restore();
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H);
+
+      // Background - Warm Cream
+      ctx.fillStyle = '#FFF8F2';
+      ctx.fillRect(0, 0, W, H);
+
+      // Subtle dot pattern
+      ctx.fillStyle = '#006666';
+      ctx.globalAlpha = 0.03;
+      for (let x = 0; x < W; x += 30) {
+        for (let y = 0; y < H; y += 30) {
+          ctx.beginPath();
+          ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1.0;
+
+      // Top Bhagawa Accent Bar
+      ctx.fillStyle = '#C06000';
+      ctx.fillRect(0, 0, W, 12);
+
+      // Seattle Skyline vector backdrop in the middle section (Sitting subtly in the background)
+      drawSeattleSkyline(ctx, 0, 780, W, 220, 'rgba(0, 102, 102, 0.06)');
+
+      // Header Section
+      ctx.textAlign = 'center';
+      ctx.font = '900 48px Poppins, sans-serif';
+      ctx.fillStyle = '#004747'; // deep teal
+      ctx.fillText('BMM CONVENTION 2026', W / 2, 90);
+
+      ctx.font = '600 24px Inter, sans-serif';
+      ctx.fillStyle = '#C06000'; // burnt saffron
+      ctx.fillText('AUGUST 6-9, 2026  •  SEATTLE CONVENTION CENTER', W / 2, 140);
+
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 28px Inter, sans-serif';
+      ctx.fillStyle = '#006666';
+      ctx.fillText('#BMM2026', W - 40, 90);
+
+      // Divider line
+      ctx.strokeStyle = 'rgba(0, 102, 102, 0.1)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(W / 2 - 350, 175);
+      ctx.lineTo(W / 2 + 350, 175);
+      ctx.stroke();
+
+      // Middle Section - Left (Photo)
+      const cx = 310, cy = 500, r = 230;
+
+      // Abstract shapes behind photo
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 20, 0, Math.PI * 2);
+      ctx.fillStyle = '#FFEBD6'; // light peach
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 20, -Math.PI / 2, Math.PI * 0.8);
+      ctx.strokeStyle = '#F37021'; // vibrant saffron border
+      ctx.lineWidth = 8;
+      ctx.stroke();
+
+      // Photo clipping and drawing
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.clip();
+      
+      if (img.width > 0) {
+        const imgRatio = img.width / img.height;
+        const targetRatio = 1;
+        let sx, sy, sw, sh;
+        if (imgRatio > targetRatio) {
+          sh = img.height;
+          sw = img.height * targetRatio;
+          sx = (img.width - sw) / 2;
+          sy = 0;
+        } else {
+          sw = img.width;
+          sh = img.width / targetRatio;
+          sx = 0;
+          sy = (img.height - sh) / 2;
+        }
+        ctx.drawImage(img, sx, sy, sw, sh, cx - r, cy - r, r * 2, r * 2);
+      } else {
+        ctx.fillStyle = '#FFEBD6';
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
+      ctx.restore();
+
+      // Inner gold border for photo
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = '#D4AF37';
+      ctx.lineWidth = 5;
+      ctx.stroke();
+
+      // Middle Section - Right (Text)
+      ctx.textAlign = 'left';
+      const tx = 590;
+
+      ctx.font = '900 38px Poppins, sans-serif';
+      ctx.fillStyle = '#C06000';
+      ctx.fillText('JOIN ME AT THE', tx, 400);
+
+      ctx.font = '900 42px Poppins, sans-serif';
+      ctx.fillStyle = '#004747'; // deep teal
+      ctx.fillText('BIGGEST', tx, 470);
+      let w1 = ctx.measureText('BIGGEST ').width;
+      ctx.fillStyle = '#D4AF37';
+      ctx.fillText('MARATHI', tx + w1, 470);
+
+      ctx.fillStyle = '#004747';
+      ctx.fillText('GATHERING IN', tx, 540);
+      ctx.fillText('NORTH AMERICA.', tx, 610);
+
+      // Line separator
+      ctx.fillStyle = '#F37021';
+      ctx.fillRect(tx, 655, 100, 6);
+
+      // Name & Details
+      ctx.font = '900 40px Poppins, sans-serif';
+      ctx.fillStyle = '#C06000';
+      ctx.fillText(name.toUpperCase(), tx, 712);
+
+      if (city) {
+        ctx.font = '600 22px Inter, sans-serif';
+        ctx.fillStyle = '#7C6E63'; // warm muted brown-gray
+        ctx.fillText(`${city}`.toUpperCase(), tx, 755);
+      }
+
+      // ─── 1. Tagline Area (Sit between Name/City section and Stats Bar) ───
+      const taglineBgY = 780;
+      const taglineBgH = 80;
+      ctx.fillStyle = '#FFEBD6'; // soft light peach/saffron
+      ctx.fillRect(0, taglineBgY, W, taglineBgH);
+
+      // Draw Tagline Text
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 30px "Noto Sans Devanagari", sans-serif';
+      ctx.fillStyle = '#004747'; // deep teal
+      ctx.fillText('जपूया संस्कृती, विणूया नाती!', W / 2, taglineBgY + taglineBgH / 2);
+      ctx.textBaseline = 'alphabetic'; // reset
+
+      // ─── 2. Bottom Stats Bar ──────────────────────────────────────────────
+      const statsY = 860;
+      const statsH = 130;
+      const colors = ['#C06000', '#004747', '#006666', '#D4AF37', '#8A0F0F'];
+      const stats = [
+        { n: '10,000+', t: 'Attendees' },
+        { n: '60+', t: 'Mandals' },
+        { n: '100+', t: 'Performances' },
+        { n: '10+', t: 'Competitions' },
+        { n: '22nd', t: 'Convention' }
+      ];
+
+      const bw = W / 5;
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(i * bw, statsY, bw, statsH);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 36px Poppins, sans-serif';
+        ctx.fillText(stats[i].n, i * bw + bw / 2, statsY + 65);
+
+        ctx.font = '500 18px Inter, sans-serif';
+        ctx.fillStyle = '#FFE28A'; // light gold label text
+        ctx.fillText(stats[i].t, i * bw + bw / 2, statsY + 98);
+      }
+
+      // ─── 3. Social Media & Website Strip (Absolute Last Footer) ──────────
+      const barY = 990;
+      const barH = 90;
+      ctx.fillStyle = '#003B3B'; // ultra deep teal
+      ctx.fillRect(0, barY, W, barH);
+
+      const barCy = barY + barH / 2;
+
+      // Left side: Globe icon + website URL
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      // Globe icon (simple circle with cross)
+      const globeX = 40;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(globeX, barCy, 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(globeX - 10, barCy);
+      ctx.lineTo(globeX + 10, barCy);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(globeX, barCy - 10);
+      ctx.lineTo(globeX, barCy + 10);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(globeX, barCy, 5, 10, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // URL text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '600 18px Inter, sans-serif';
+      ctx.fillText('www.bmmseattle2026.org', globeX + 20, barCy + 1);
+
+      // Right side: 3 social icons + shared handle
+      ctx.textAlign = 'right';
+      ctx.font = '600 18px Inter, sans-serif';
+      ctx.fillStyle = '#D4AF37';
+      const handleText = '/BMM2026Seattle';
+      const handleW = ctx.measureText(handleText).width;
+      const handleX = W - 40;
+      ctx.fillText(handleText, handleX, barCy + 1);
+
+      // Icons to the left of the handle
+      const iconStartX = handleX - handleW - 24;
+      const iconR = 14;
+      const iconGap = 40;
+
+      // YouTube (rightmost icon)
+      const ytX = iconStartX;
+      ctx.beginPath();
+      ctx.arc(ytX, barCy, iconR, 0, Math.PI * 2);
+      ctx.fillStyle = '#FF0000';
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('▶', ytX + 1, barCy + 1);
+
+      // Facebook
+      const fbX = ytX - iconGap;
+      ctx.beginPath();
+      ctx.arc(fbX, barCy, iconR, 0, Math.PI * 2);
+      ctx.fillStyle = '#1877F2';
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 18px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('f', fbX, barCy + 1);
+
+      // Instagram (leftmost icon)
+      const igX = fbX - iconGap;
+      ctx.beginPath();
+      ctx.arc(igX, barCy, iconR, 0, Math.PI * 2);
+      const igGrad = ctx.createLinearGradient(igX - iconR, barCy + iconR, igX + iconR, barCy - iconR);
+      igGrad.addColorStop(0, '#feda75');
+      igGrad.addColorStop(0.35, '#fa7e1e');
+      igGrad.addColorStop(0.55, '#d62976');
+      igGrad.addColorStop(0.8, '#962fbf');
+      igGrad.addColorStop(1, '#4f5bd5');
+      ctx.fillStyle = igGrad;
+      ctx.fill();
+      // Camera icon inside
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.6;
+      const cix = igX - 7, ciy2 = barCy - 7;
+      ctx.beginPath();
+      ctx.moveTo(cix + 2, ciy2);
+      ctx.lineTo(cix + 12, ciy2);
+      ctx.quadraticCurveTo(cix + 14, ciy2, cix + 14, ciy2 + 2);
+      ctx.lineTo(cix + 14, ciy2 + 12);
+      ctx.quadraticCurveTo(cix + 14, ciy2 + 14, cix + 12, ciy2 + 14);
+      ctx.lineTo(cix + 2, ciy2 + 14);
+      ctx.quadraticCurveTo(cix, ciy2 + 14, cix, ciy2 + 12);
+      ctx.lineTo(cix, ciy2 + 2);
+      ctx.quadraticCurveTo(cix, ciy2, cix + 2, ciy2);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(igX, barCy, 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(igX + 4.5, barCy - 4.5, 1, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Reset text alignment
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+    };
+  }, [photo, name, role, city]);
+
+  return (
+    <canvas
+      ref={posterRef}
+      style={{ width: '100%', maxWidth: '340px', display: 'block', margin: '0 auto', borderRadius: '12px', border: '1px solid #eee' }}
+    />
+  );
+};
+
+// ─── Main App ──────────────────────────────────────────────────────────────────
 const App = () => {
-  const [step, setStep] = useState('form'); // 'form', 'preview', 'admin'
-  const [formData, setFormData] = useState({
-    name: '',
-    photo: null,
-    city: '',
-    role: 'Attendee',
-    ticketType: 'Attendee'
-  });
+  const [step, setStep] = useState('form');
+  const [formData, setFormData] = useState({ name: '', photo: null, city: '', role: 'Attendee', gender: 'female' });
+  const [groupFormData, setGroupFormData] = useState({ groupName: '', memberCount: 4, photos: [null, null, null, null], city: '' });
   const [registrations, setRegistrations] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  
-  const posterRef = useRef(null);
-  const badgeRef = useRef(null);
+
+  const dpCanvasRef = useRef(null);
+  const posterCanvasRef = useRef(null);
+  const groupDpCanvasRef = useRef(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('bmm_registrations');
@@ -42,13 +877,24 @@ const App = () => {
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, photo: reader.result });
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setFormData(f => ({ ...f, photo: reader.result }));
+    reader.readAsDataURL(file);
+  };
+
+  const handleGroupPhotoUpload = (e, index) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setGroupFormData(f => {
+        const newPhotos = [...f.photos];
+        newPhotos[index] = reader.result;
+        return { ...f, photos: newPhotos };
+      });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleGenerate = () => {
@@ -56,57 +902,58 @@ const App = () => {
       alert('Please enter your name and upload a photo!');
       return;
     }
-
     setIsGenerating(true);
-    
-    // Simulate generation delay
     setTimeout(() => {
       const newReg = {
         ...formData,
         id: `BMM26-${Math.floor(1000 + Math.random() * 9000)}`,
         date: new Date().toLocaleDateString()
       };
-      
       const updated = [newReg, ...registrations];
       setRegistrations(updated);
       localStorage.setItem('bmm_registrations', JSON.stringify(updated));
-      
       setIsGenerating(false);
       setStep('preview');
-      confetti({
-        particleCount: 150,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#D4AF37', '#008080', '#FF9933']
-      });
-    }, 2000);
+      confetti({ particleCount: 160, spread: 80, origin: { y: 0.55 }, colors: ['#D4AF37', '#0a1f5c', '#FF9933'] });
+    }, 1800);
   };
 
-  const downloadImage = async (ref, fileName) => {
-    const element = ref.current;
-    const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+  const handleGenerateGroup = () => {
+    const uploadedPhotosCount = groupFormData.photos.slice(0, groupFormData.memberCount).filter(p => p).length;
+    if (!groupFormData.groupName) {
+      alert('Please enter a group/mandal name!');
+      return;
+    }
+    if (uploadedPhotosCount < groupFormData.memberCount) {
+      alert(`Please upload photos for all ${groupFormData.memberCount} members!`);
+      return;
+    }
+    setIsGenerating(true);
+    setTimeout(() => {
+      const newReg = {
+        name: groupFormData.groupName,
+        photo: groupFormData.photos[0], // Use first photo as preview in admin
+        city: groupFormData.city,
+        role: `Group (${groupFormData.memberCount} Members)`,
+        id: `BMM26-G-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toLocaleDateString(),
+        isGroup: true,
+        groupData: groupFormData
+      };
+      const updated = [newReg, ...registrations];
+      setRegistrations(updated);
+      localStorage.setItem('bmm_registrations', JSON.stringify(updated));
+      setIsGenerating(false);
+      setStep('previewGroup');
+      confetti({ particleCount: 160, spread: 80, origin: { y: 0.55 }, colors: ['#D4AF37', '#0a1f5c', '#FF9933'] });
+    }, 1800);
+  };
+
+  const downloadCanvas = (ref, fileName) => {
     const link = document.createElement('a');
     link.download = `${fileName}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.href = ref.current.toDataURL('image/png');
     link.click();
-  };
-
-  const downloadPDF = async () => {
-    const element = badgeRef.current;
-    const canvas = await html2canvas(element, { scale: 2, useCORS: true });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    pdf.addImage(imgData, 'PNG', 10, 10, 85, 135);
-    pdf.save('BMM2026_Badge.pdf');
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const shareOnWhatsApp = () => {
-    const text = `I am attending BMM2026 Seattle! See you there! 📅 6-9 August 2026 📍 Seattle Convention Center`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const deleteRegistration = (id) => {
@@ -116,371 +963,365 @@ const App = () => {
   };
 
   return (
-    <div className="app-container">
-      {/* Header */}
-      <header style={{ width: '100%', textAlign: 'center', marginBottom: '40px' }}>
-        <img src="/logo.png" alt="BMM 2026 Logo" style={{ height: '80px', marginBottom: '10px' }} />
-        <h1 style={{ color: 'var(--gold)', fontSize: '2.5rem' }}>BMM2026 Seattle</h1>
-        <p style={{ color: 'var(--white)', opacity: 0.8 }}>Event Poster & Entry Badge Generator</p>
+    <div className="bmm-app">
+      {/* ── Header ────────────────────────────────────────────────── */}
+      <header className="bmm-header">
+        <div className="bmm-header-inner">
+          <img src="/logo.png" alt="BMM 2026" className="bmm-logo" />
+          <div>
+            <h1 className="bmm-title">BMM 2026 Seattle</h1>
+            <p className="bmm-subtitle">Profile Frame &amp; Poster Generator</p>
+          </div>
+        </div>
+        <nav className="bmm-nav">
+          <button
+            className={`bmm-nav-btn ${step === 'form' || step === 'preview' ? 'active' : ''}`}
+            onClick={() => setStep(formData.name && formData.photo ? 'preview' : 'form')}
+          >Personal DP</button>
+          <button
+            className={`bmm-nav-btn ${step === 'groupForm' || step === 'previewGroup' ? 'active' : ''}`}
+            onClick={() => setStep(groupFormData.groupName && groupFormData.photos.filter(p => p).length >= groupFormData.memberCount ? 'previewGroup' : 'groupForm')}
+          >Group DP</button>
+          <button
+            className={`bmm-nav-btn ${step === 'admin' ? 'active' : ''}`}
+            onClick={() => setStep('admin')}
+          ><LayoutDashboard size={16} /> Admin</button>
+        </nav>
       </header>
 
-      <nav style={{ marginBottom: '30px', display: 'flex', gap: '15px' }}>
-        <button 
-          className={`btn ${step === 'form' || step === 'preview' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setStep('form')}
-        >
-          Generator
-        </button>
-        <button 
-          className={`btn ${step === 'admin' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setStep('admin')}
-        >
-          <LayoutDashboard size={20} /> Admin Panel
-        </button>
-      </nav>
+      <main className="bmm-main">
+        <AnimatePresence mode="wait">
 
-      <AnimatePresence mode="wait">
-        {step === 'form' && (
-          <motion.div 
-            key="form"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="glass-card"
-          >
-            <h2 style={{ marginBottom: '25px', color: 'var(--gold-light)' }}>Create Your Badge</h2>
-            
-            <div className="form-group">
-              <label><User size={18} /> Full Name</label>
-              <input 
-                type="text" 
-                placeholder="Enter your name"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-              />
-            </div>
+          {/* ── FORM ──────────────────────────────────────────────── */}
+          {step === 'form' && (
+            <motion.div key="form" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -24 }} className="bmm-card">
+              <div className="card-badge">Step 1 of 2</div>
+              <h2 className="card-title">Enter Your Details</h2>
+              <p className="card-desc">Fill in your info to generate your personalised BMM 2026 frame, poster, and WhatsApp DP.</p>
 
-            <div className="form-group">
-              <label><Upload size={18} /> Upload Photo</label>
-              <div 
-                style={{ 
-                  border: '2px dashed var(--glass-border)', 
-                  borderRadius: '12px', 
-                  padding: '20px', 
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  background: 'rgba(255,255,255,0.05)'
-                }}
-                onClick={() => document.getElementById('photo-upload').click()}
-              >
-                {formData.photo ? (
-                  <img src={formData.photo} alt="Preview" style={{ width: '100px', height: '100px', borderRadius: '50%', objectFit: 'cover' }} />
-                ) : (
-                  <div style={{ opacity: 0.6 }}>
-                    <Upload size={32} style={{ marginBottom: '10px' }} />
-                    <p>Click to upload your professional photo</p>
-                  </div>
-                )}
-                <input 
-                  id="photo-upload" 
-                  type="file" 
-                  hidden 
-                  accept="image/*"
-                  onChange={handlePhotoUpload}
+              <div className="form-row">
+                <label><User size={15} /> Full Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Rahul Deshmukh"
+                  value={formData.name}
+                  onChange={e => setFormData(f => ({ ...f, name: e.target.value }))}
                 />
               </div>
-            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              <div className="form-group">
-                <label><MapPin size={18} /> City</label>
-                <input 
-                  type="text" 
+              {/* Gender Selector for Marathi Text */}
+              <div className="form-row">
+                <label>Marathi Tagline Gender *</label>
+                <div className="segmented-control" style={{ marginBottom: 0 }}>
+                  <button
+                    type="button"
+                    className={`segmented-btn ${formData.gender === 'female' ? 'active' : ''}`}
+                    onClick={() => setFormData(f => ({ ...f, gender: 'female' }))}
+                  >
+                    Female: मी जातेय...
+                  </button>
+                  <button
+                    type="button"
+                    className={`segmented-btn ${formData.gender === 'male' ? 'active' : ''}`}
+                    onClick={() => setFormData(f => ({ ...f, gender: 'male' }))}
+                  >
+                    Male: मी जातोय...
+                  </button>
+                  <button
+                    type="button"
+                    className={`segmented-btn ${formData.gender === 'plural' ? 'active' : ''}`}
+                    onClick={() => setFormData(f => ({ ...f, gender: 'plural' }))}
+                  >
+                    Group: आम्ही जातोय...
+                  </button>
+                </div>
+              </div>
+
+              {/* Photo Upload */}
+              <div className="form-row">
+                <label><Upload size={15} /> Your Photo *</label>
+                <div className="photo-drop" onClick={() => document.getElementById('photo-input').click()}>
+                  {formData.photo
+                    ? <img src={formData.photo} alt="preview" className="photo-preview-thumb" />
+                    : <>
+                        <Upload size={36} style={{ opacity: 0.4, marginBottom: 8 }} />
+                        <p>Click to upload photo</p>
+                        <span>JPG, PNG · Best with clear face</span>
+                      </>
+                  }
+                  <input id="photo-input" type="file" hidden accept="image/*" onChange={handlePhotoUpload} />
+                </div>
+              </div>
+
+              <div className="form-two-col">
+                <div className="form-row">
+                  <label><MapPin size={15} /> City</label>
+                  <input type="text" placeholder="e.g. Mumbai" value={formData.city} onChange={e => setFormData(f => ({ ...f, city: e.target.value }))} />
+                </div>
+                <div className="form-row">
+                  <label><Briefcase size={15} /> Role / Designation</label>
+                  <input type="text" placeholder="e.g. Delegate" value={formData.role} onChange={e => setFormData(f => ({ ...f, role: e.target.value }))} />
+                </div>
+              </div>
+
+              <button className="bmm-btn-primary" onClick={handleGenerate} disabled={isGenerating}>
+                {isGenerating
+                  ? <><span className="spinner-ring" /> Generating…</>
+                  : '✨ Generate My Frames'}
+              </button>
+            </motion.div>
+          )}
+
+          {/* ── GROUP DP FORM ─────────────────────────────────────── */}
+          {step === 'groupForm' && (
+            <motion.div key="groupForm" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -24 }} className="bmm-card">
+              <div className="card-badge">Group DP Generator</div>
+              <h2 className="card-title">Enter Group Details</h2>
+              <p className="card-desc">Create a custom circular collage DP for your family, group, or local Mandal.</p>
+
+              {/* Group Size Selector */}
+              <div className="form-row">
+                <label>Group Size</label>
+                <div className="segmented-control">
+                  {[2, 3, 4].map(count => (
+                    <button
+                      key={count}
+                      type="button"
+                      className={`segmented-btn ${groupFormData.memberCount === count ? 'active' : ''}`}
+                      onClick={() => setGroupFormData(f => ({ ...f, memberCount: count }))}
+                    >
+                      {count} Members
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Photo Grid Uploaders */}
+              <div className="form-row">
+                <label><Upload size={15} /> Member Photos *</label>
+                <div className="group-photo-grid">
+                  {Array.from({ length: groupFormData.memberCount }).map((_, index) => (
+                    <div
+                      key={index}
+                      className={`group-photo-slot ${groupFormData.photos[index] ? 'has-image' : ''}`}
+                      onClick={() => document.getElementById(`group-photo-${index}`).click()}
+                    >
+                      {groupFormData.photos[index] ? (
+                        <img src={groupFormData.photos[index]} alt={`member ${index + 1}`} className="group-photo-thumb" />
+                      ) : (
+                        <>
+                          <Upload size={18} style={{ opacity: 0.5, marginBottom: 4 }} />
+                          <span>Member {index + 1}</span>
+                        </>
+                      )}
+                      <input
+                        id={`group-photo-${index}`}
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={(e) => handleGroupPhotoUpload(e, index)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Group Name & City */}
+              <div className="form-row">
+                <label><User size={15} /> Group / Mandal Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Seattle Swaravahini"
+                  value={groupFormData.groupName}
+                  onChange={e => setGroupFormData(f => ({ ...f, groupName: e.target.value }))}
+                />
+              </div>
+
+              <div className="form-row">
+                <label><MapPin size={15} /> City</label>
+                <input
+                  type="text"
                   placeholder="e.g. Seattle"
-                  value={formData.city}
-                  onChange={(e) => setFormData({...formData, city: e.target.value})}
+                  value={groupFormData.city}
+                  onChange={e => setGroupFormData(f => ({ ...f, city: e.target.value }))}
                 />
               </div>
-              <div className="form-group">
-                <label><Briefcase size={18} /> Role / Designation</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Delegate"
-                  value={formData.role}
-                  onChange={(e) => setFormData({...formData, role: e.target.value})}
-                />
-              </div>
-            </div>
 
-            <div className="form-group">
-              <label><Ticket size={18} /> Ticket Type</label>
-              <select 
-                value={formData.ticketType}
-                onChange={(e) => setFormData({...formData, ticketType: e.target.value})}
-              >
-                <option value="I am attending">I am attending</option>
-                <option value="Attendee">Attendee</option>
-              </select>
-            </div>
-
-            <button 
-              className="btn btn-primary" 
-              style={{ width: '100%', marginTop: '10px' }}
-              onClick={handleGenerate}
-              disabled={isGenerating}
-            >
-              {isGenerating ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div className="spinner"></div> Creating your badge...
-                </div>
-              ) : (
-                'Generate My Badge'
-              )}
-            </button>
-          </motion.div>
-        )}
-
-        {step === 'preview' && (
-          <motion.div 
-            key="preview"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="previews-layout"
-            style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '40px' }}
-          >
-            <div style={{ display: 'flex', gap: '20px' }}>
-              <button className="btn btn-secondary" onClick={() => setStep('form')}>
-                <ArrowLeft size={18} /> Edit Details
+              <button className="bmm-btn-primary" onClick={handleGenerateGroup} disabled={isGenerating}>
+                {isGenerating
+                  ? <><span className="spinner-ring" /> Generating…</>
+                  : '✨ Generate Group DP'}
               </button>
-              <button className="btn btn-primary" onClick={shareOnWhatsApp}>
-                <Share2 size={18} /> Share on WhatsApp
-              </button>
-            </div>
+            </motion.div>
+          )}
 
-            <div className="previews-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '30px', width: '100%' }}>
-              
-              {/* Poster Section */}
-              <div style={{ textAlign: 'center' }}>
-                <h3 style={{ marginBottom: '15px' }}>Event Poster</h3>
-                <div ref={posterRef} className="poster-container">
-                  <div className="poster-bg-pattern"></div>
-                  <img src="/poster-bg.png" alt="BG" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, opacity: 0.6 }} />
-                  
-                  <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <img src="/logo.png" alt="Logo" style={{ height: '60px', marginBottom: '20px' }} />
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 300, letterSpacing: '4px' }}>BMM2026 SEATTLE</h2>
-                    <h1 className="poster-title">I AM ATTENDING</h1>
-                    
-                    <div style={{ 
-                      width: '200px', 
-                      height: '200px', 
-                      borderRadius: '50%', 
-                      border: '6px solid var(--gold)', 
-                      margin: '30px 0',
-                      overflow: 'hidden',
-                      boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-                      position: 'relative'
-                    }}>
-                      <img src={formData.photo} alt="User" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-
-                    <h2 className="text-glow" style={{ fontSize: '2.5rem', marginBottom: '5px' }}>{formData.name}</h2>
-                    <p style={{ fontSize: '1.1rem', opacity: 0.9 }}>{formData.role} {formData.city ? `from ${formData.city}` : ''}</p>
-
-                    <div style={{ marginTop: '40px', borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: '20px' }}>
-                      <p style={{ fontFamily: 'Tiro Marathi', fontSize: '1.2rem', color: 'var(--gold-light)' }}>जपूया संस्कृती, विणूया नाती</p>
-                      <p style={{ fontSize: '0.9rem', marginTop: '10px' }}>6–9 August 2026 | Seattle Convention Center</p>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ marginTop: '15px' }}>
-                  <button className="btn btn-secondary" onClick={() => downloadImage(posterRef, 'BMM2026_Poster')}>
-                    <Download size={18} /> Download Poster (PNG)
-                  </button>
-                </div>
+          {/* ── PREVIEW ───────────────────────────────────────────── */}
+          {step === 'preview' && (
+            <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="preview-wrapper">
+              <div className="preview-topbar">
+                <button className="bmm-btn-ghost" onClick={() => setStep('form')}><ArrowLeft size={16} /> Edit</button>
+                <button className="bmm-btn-ghost whatsapp-share" onClick={() => {
+                  const text = `🎉 I am attending BMM 2026 Seattle! 6–9 August 2026 | Seattle Convention Center\nजपूया संस्कृती, विणूया नाती!`;
+                  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                }}>
+                  <Share2 size={16} /> Share on WhatsApp
+                </button>
               </div>
 
-              {/* Badge Section */}
-              <div style={{ textAlign: 'center' }}>
-                <h3 style={{ marginBottom: '15px' }}>Entry Badge</h3>
-                <div ref={badgeRef} className="badge-container">
-                  <div className="badge-header">
-                    <img src="/logo.png" alt="Logo" style={{ height: '50px' }} />
-                    <div style={{ marginLeft: '15px', color: 'white', textAlign: 'left' }}>
-                      <p style={{ fontSize: '0.8rem', fontWeight: 700 }}>BMM 2026</p>
-                      <p style={{ fontSize: '0.6rem' }}>Seattle Convention Center</p>
-                    </div>
-                  </div>
-                  
-                  <div style={{ padding: '30px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div style={{ width: '140px', height: '140px', borderRadius: '15px', overflow: 'hidden', marginBottom: '20px', border: '3px solid var(--teal)' }}>
-                      <img src={formData.photo} alt="User" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-                    
-                    <h2 style={{ fontSize: '1.5rem', color: 'var(--teal-dark)', textAlign: 'center' }}>{formData.name}</h2>
-                    <p style={{ fontSize: '1rem', color: '#666', fontWeight: 600 }}>{formData.role}</p>
-                    
-                    <div style={{ 
-                      marginTop: '20px', 
-                      padding: '10px 20px', 
-                      background: formData.ticketType === 'I am attending' ? 'var(--gold)' : 'var(--teal)', 
-                      borderRadius: '30px',
-                      color: 'white',
-                      fontSize: '0.8rem',
-                      fontWeight: 800
-                    }}>
-                      {formData.ticketType.toUpperCase()}
-                    </div>
+              <div className="preview-grid">
 
-                    <div style={{ marginTop: '30px', display: 'flex', alignItems: 'center', gap: '20px' }}>
-                      <div style={{ textAlign: 'left' }}>
-                        <p style={{ fontSize: '0.6rem', color: '#999' }}>UNIQUE ID</p>
-                        <p style={{ fontSize: '0.9rem', fontWeight: 700 }}>BMM26-{Math.floor(1000 + Math.random() * 9000)}</p>
-                        <p style={{ fontSize: '0.6rem', color: '#999', marginTop: '10px' }}>DATES</p>
-                        <p style={{ fontSize: '0.9rem', fontWeight: 700 }}>Aug 6-9, 2026</p>
-                      </div>
-                      <div style={{ padding: '10px', border: '1px solid #eee', borderRadius: '10px' }}>
-                        <QRCodeSVG value={`BMM2026:${formData.name}:${formData.ticketType}`} size={80} />
-                      </div>
-                    </div>
+
+                {/* ── CARD 2: Social Media Poster ── */}
+                <div className="preview-card">
+                  <div className="preview-card-header gold">
+                    <span>📣 Social Media Poster</span>
+                    <small>For Instagram / Facebook</small>
                   </div>
-                  
-                  <div style={{ position: 'absolute', bottom: 0, width: '100%', height: '10px', background: 'var(--gradient)' }}></div>
+                  <div className="preview-card-body">
+                    <SocialPosterCanvas
+                      photo={formData.photo}
+                      name={formData.name}
+                      role={formData.role}
+                      city={formData.city}
+                      posterRef={posterCanvasRef}
+                    />
+                  </div>
+                  <div className="preview-card-footer">
+                    <button className="bmm-btn-download" onClick={() => downloadCanvas(posterCanvasRef, 'BMM2026_IAmAttending_Poster')}>
+                      <Download size={16} /> Download PNG
+                    </button>
+                  </div>
                 </div>
-                <div style={{ marginTop: '15px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                  <button className="btn btn-secondary" onClick={() => downloadImage(badgeRef, 'BMM2026_Badge')}>
-                    <Download size={18} /> PNG
-                  </button>
-                  <button className="btn btn-secondary" onClick={downloadPDF}>
-                    <Download size={18} /> PDF
-                  </button>
-                  <button className="btn btn-secondary" onClick={handlePrint}>
-                    <Printer size={18} /> Print
-                  </button>
+
+                {/* ── CARD 3: WhatsApp DP ── */}
+                <div className="preview-card">
+                  <div className="preview-card-header teal">
+                    <span>💬 WhatsApp DP</span>
+                    <small>Circular crop with BMM ring</small>
+                  </div>
+                  <div className="preview-card-body">
+                    <WhatsAppDPCanvas
+                      photo={formData.photo}
+                      name={formData.name}
+                      gender={formData.gender}
+                      dpRef={dpCanvasRef}
+                    />
+                    <p className="tagline-preview">जपूया संस्कृती, विणूया नाती!</p>
+                  </div>
+                  <div className="preview-card-footer">
+                    <button className="bmm-btn-download" onClick={() => downloadCanvas(dpCanvasRef, 'BMM2026_WhatsApp_DP')}>
+                      <Download size={16} /> Download PNG
+                    </button>
+                  </div>
                 </div>
+
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── GROUP DP PREVIEW ──────────────────────────────────── */}
+          {step === 'previewGroup' && (
+            <motion.div key="previewGroup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="preview-wrapper">
+              <div className="preview-topbar">
+                <button className="bmm-btn-ghost" onClick={() => setStep('groupForm')}><ArrowLeft size={16} /> Edit</button>
+                <button className="bmm-btn-ghost whatsapp-share" onClick={() => {
+                  const text = `🎉 Our group is attending BMM 2026 Seattle! 6–9 August 2026 | Seattle Convention Center\nजपूया संस्कृती, विणूया नाती!`;
+                  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                }}>
+                  <Share2 size={16} /> Share on WhatsApp
+                </button>
               </div>
 
-            </div>
-          </motion.div>
-        )}
+              <div className="preview-grid" style={{ justifyContent: 'center' }}>
+                {/* ── CARD: Group DP Collage ── */}
+                <div className="preview-card" style={{ maxWidth: '360px', margin: '0 auto' }}>
+                  <div className="preview-card-header teal">
+                    <span>👥 Group WhatsApp DP</span>
+                    <small>{groupFormData.memberCount} Members Collage</small>
+                  </div>
+                  <div className="preview-card-body">
+                    <GroupCollageCanvas
+                      photos={groupFormData.photos}
+                      memberCount={groupFormData.memberCount}
+                      groupName={groupFormData.groupName}
+                      city={groupFormData.city}
+                      canvasRef={groupDpCanvasRef}
+                    />
+                    <p className="tagline-preview">जपूया संस्कृती, विणूया नाती!</p>
+                  </div>
+                  <div className="preview-card-footer">
+                    <button className="bmm-btn-download" onClick={() => downloadCanvas(groupDpCanvasRef, 'BMM2026_Group_DP')}>
+                      <Download size={16} /> Download PNG
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
-        {step === 'admin' && (
-          <motion.div 
-            key="admin"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="glass-card"
-            style={{ maxWidth: '1000px' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-              <h2 style={{ color: 'var(--gold-light)' }}>Registration Database</h2>
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => {
+          {/* ── ADMIN ─────────────────────────────────────────────── */}
+          {step === 'admin' && (
+            <motion.div key="admin" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} className="bmm-card wide">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                <h2 className="card-title" style={{ marginBottom: 0 }}>Registration Database</h2>
+                <button className="bmm-btn-ghost" onClick={() => {
                   const csv = [
-                    ['ID', 'Name', 'City', 'Role', 'Ticket', 'Date'],
-                    ...registrations.map(r => [r.id, r.name, r.city, r.role, r.ticketType, r.date])
-                  ].map(e => e.join(",")).join("\n");
-                  
-                  const blob = new Blob([csv], { type: 'text/csv' });
-                  const url = URL.createObjectURL(blob);
+                    ['ID', 'Name', 'City', 'Role', 'Date'],
+                    ...registrations.map(r => [r.id, r.name, r.city, r.role, r.date])
+                  ].map(e => e.join(',')).join('\n');
                   const a = document.createElement('a');
-                  a.href = url;
+                  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
                   a.download = 'BMM2026_Registrations.csv';
                   a.click();
-                }}
-              >
-                Download CSV
-              </button>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', color: 'white' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'left' }}>
-                    <th style={{ padding: '15px' }}>ID</th>
-                    <th style={{ padding: '15px' }}>Photo</th>
-                    <th style={{ padding: '15px' }}>Name</th>
-                    <th style={{ padding: '15px' }}>Details</th>
-                    <th style={{ padding: '15px' }}>Ticket</th>
-                    <th style={{ padding: '15px' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {registrations.length === 0 ? (
+                }}>Export CSV</button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="admin-table">
+                  <thead>
                     <tr>
-                      <td colSpan="6" style={{ padding: '40px', textAlign: 'center', opacity: 0.5 }}>No registrations found yet.</td>
+                      <th>ID</th><th>Photo</th><th>Name</th><th>City</th><th>Role</th><th>Date</th><th>Actions</th>
                     </tr>
-                  ) : (
-                    registrations.map((reg) => (
-                      <tr key={reg.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <td style={{ padding: '15px', fontSize: '0.8rem' }}>{reg.id}</td>
-                        <td style={{ padding: '15px' }}>
-                          <img src={reg.photo} alt={reg.name} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
-                        </td>
-                        <td style={{ padding: '15px', fontWeight: 700 }}>{reg.name}</td>
-                        <td style={{ padding: '15px', fontSize: '0.9rem' }}>
-                          <div>{reg.role}</div>
-                          <div style={{ opacity: 0.6 }}>{reg.city}</div>
-                        </td>
-                        <td style={{ padding: '15px' }}>
-                          <span style={{ 
-                            padding: '4px 10px', 
-                            borderRadius: '20px', 
-                            background: reg.ticketType === 'I am attending' ? 'var(--gold)' : 'rgba(255,255,255,0.1)',
-                            fontSize: '0.7rem',
-                            fontWeight: 700
-                          }}>
-                            {reg.ticketType}
-                          </span>
-                        </td>
-                        <td style={{ padding: '15px' }}>
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                            <button 
-                              style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer' }}
-                              onClick={() => {
-                                setFormData(reg);
-                                setStep('preview');
-                              }}
-                            >
-                              View
-                            </button>
-                            <button 
-                              style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer' }}
-                              onClick={() => deleteRegistration(reg.id)}
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  </thead>
+                  <tbody>
+                    {registrations.length === 0
+                      ? <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, opacity: 0.5 }}>No entries yet.</td></tr>
+                      : registrations.map(reg => (
+                          <tr key={reg.id}>
+                            <td className="mono">{reg.id}</td>
+                            <td><img src={reg.photo} alt={reg.name} className="admin-avatar" /></td>
+                            <td><strong>{reg.name}</strong></td>
+                            <td>{reg.city}</td>
+                            <td>{reg.role}</td>
+                            <td>{reg.date}</td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="admin-action view" onClick={() => {
+                                  if (reg.isGroup) {
+                                    setGroupFormData(reg.groupData);
+                                    setStep('previewGroup');
+                                  } else {
+                                    setFormData(reg);
+                                    setStep('preview');
+                                  }
+                                }}>View</button>
+                                <button className="admin-action del" onClick={() => deleteRegistration(reg.id)}><Trash2 size={14} /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          )}
 
-      <style>{`
-        .spinner {
-          width: 20px;
-          height: 20px;
-          border: 3px solid rgba(255,255,255,0.3);
-          border-radius: 50%;
-          border-top-color: white;
-          animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        @media print {
-          .btn, header, nav, .glass-card { display: none !important; }
-          .app-container { background: white !important; padding: 0 !important; }
-          .badge-container { box-shadow: none !important; border: 1px solid #eee; }
-        }
-      `}</style>
+        </AnimatePresence>
+      </main>
+
+      <footer className="bmm-footer">
+        <p>जपूया संस्कृती, विणूया नाती! &nbsp;·&nbsp; BMM 2026 Seattle &nbsp;·&nbsp; 6–9 August 2026</p>
+      </footer>
     </div>
   );
 };
