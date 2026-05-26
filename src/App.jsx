@@ -52,6 +52,135 @@ const removeLogoBackground = (img) => {
   return canvas;
 };
 
+// Helper to draw measured text along a circular path.
+const drawTextAlongArc = (ctx, text, cx, cy, r, startAngle, endAngle, isClockwise, outward, font, color, letterSpacing = 0) => {
+  ctx.save();
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const chars = [...text];
+  const widths = chars.map((char) => ctx.measureText(char).width);
+  const totalWidth = widths.reduce((sum, width) => sum + width, 0) + letterSpacing * Math.max(chars.length - 1, 0);
+  const arcAngle = Math.abs(endAngle - startAngle);
+  const textAngle = Math.min(totalWidth / r, arcAngle * 0.92);
+  const midAngle = (startAngle + endAngle) / 2;
+  const direction = isClockwise ? 1 : -1;
+  let angle = midAngle - direction * textAngle / 2;
+
+  chars.forEach((char, index) => {
+    const charAngleSize = widths[index] / r;
+    angle += direction * charAngleSize / 2;
+
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    ctx.save();
+    ctx.translate(x, y);
+    const rotationAngle = angle + (outward ? Math.PI / 2 : -Math.PI / 2);
+    ctx.rotate(rotationAngle);
+    ctx.fillText(char, 0, 0);
+    ctx.restore();
+
+    angle += direction * (charAngleSize / 2 + letterSpacing / r);
+  });
+  ctx.restore();
+};
+
+// Helper to draw a beautifully shaded and layered gold octagon badge at the bottom-center
+const drawGoldOctagonBadge = (ctx, bx, by, br, logoImg, useWhiteLogoBg = false) => {
+  ctx.save();
+  // Drop shadow for depth
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 5;
+
+  // 1. Draw outer gold octagon border
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const angle = (i * Math.PI) / 4 + Math.PI / 8;
+    const x = bx + (br + 4) * Math.cos(angle);
+    const y = by + (br + 4) * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#d4af37'; // antique gold
+  ctx.fill();
+
+  // 2. Draw outer thin white border
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const angle = (i * Math.PI) / 4 + Math.PI / 8;
+    const x = bx + (br + 1) * Math.cos(angle);
+    const y = by + (br + 1) * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // 3. Draw inner filled octagon
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const angle = (i * Math.PI) / 4 + Math.PI / 8;
+    const x = bx + br * Math.cos(angle);
+    const y = by + br * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  
+  if (useWhiteLogoBg) {
+    ctx.fillStyle = '#ffffff';
+  } else {
+    const badgeGrad = ctx.createLinearGradient(bx - br, by - br, bx + br, by + br);
+    badgeGrad.addColorStop(0, '#fff4b8'); // bright gold
+    badgeGrad.addColorStop(0.3, '#fbc02d'); // yellow-orange gold
+    badgeGrad.addColorStop(0.7, '#f57f17'); // amber gold
+    badgeGrad.addColorStop(1, '#a85000'); // deep burnt gold
+    ctx.fillStyle = badgeGrad;
+  }
+  ctx.fill();
+
+  // 4. Draw inner thin white accent stroke
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const angle = (i * Math.PI) / 4 + Math.PI / 8;
+    const x = bx + (br - 6) * Math.cos(angle);
+    const y = by + (br - 6) * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.restore(); // remove shadow for inner drawings
+
+  // 5. Draw logo image inside the badge
+  if (logoImg && logoImg.width > 0) {
+    const processedLogo = removeLogoBackground(logoImg);
+    const lw = br * 1.15; // logo width inside the badge
+    const lh = lw * (logoImg.height / logoImg.width);
+    const lx = bx - lw / 2;
+    const ly = by - lh / 2 - 10; // offset slightly up for text
+    ctx.drawImage(processedLogo, lx, ly, lw, lh);
+  }
+
+  // 6. Draw BMM2026 text at the bottom inside the badge
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#051036'; // dark navy blue
+  ctx.font = '900 13px Inter, sans-serif';
+  ctx.fillText('BMM2026', bx, by + br * 0.65);
+  ctx.restore();
+};
+
 // ─── Group Collage Canvas Renderer ────────────────────────────────────────────
 const GroupCollageCanvas = ({ photos, memberCount, groupName, city, canvasRef }) => {
   useEffect(() => {
@@ -64,13 +193,14 @@ const GroupCollageCanvas = ({ photos, memberCount, groupName, city, canvasRef })
 
     // Load member images
     const loadedImages = [];
+    const logoImg = new Image();
     const photosToLoad = photos.slice(0, memberCount);
     const totalImagesToLoad = photosToLoad.filter(p => p).length;
 
     let imagesLoaded = 0;
     const checkAllLoaded = () => {
       imagesLoaded++;
-      if (imagesLoaded === totalImagesToLoad) {
+      if (imagesLoaded === totalImagesToLoad + 1) {
         document.fonts.ready.then(() => {
           draw();
         });
@@ -95,19 +225,85 @@ const GroupCollageCanvas = ({ photos, memberCount, groupName, city, canvasRef })
       img.src = photoData;
     });
 
+    logoImg.onload = checkAllLoaded;
+    logoImg.onerror = checkAllLoaded;
+    logoImg.src = '/logo.png';
+
     const draw = () => {
       ctx.clearRect(0, 0, SIZE, SIZE);
-      ctx.fillStyle = '#ffffff';
+      
+      // 1. Fill entire canvas with orange background
+      ctx.fillStyle = '#f37021';
       ctx.fillRect(0, 0, SIZE, SIZE);
 
       const cx = SIZE / 2;
       const cy = SIZE / 2;
-      const r = SIZE / 2 - 20;
+      const r_outer = 320;
+      const r_inner = 230;
 
-      // ─── 1. DRAW COLLAGE PHOTOS (Clipped to main circle) ───
+      // 2. Draw white ring outer fill
+      ctx.beginPath();
+      ctx.arc(cx, cy, r_outer, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // 3. Draw outer gold accent thin border line
+      ctx.beginPath();
+      ctx.arc(cx, cy, r_outer - 3, 0, Math.PI * 2);
+      ctx.strokeStyle = '#e59a18';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // 4. Draw curved text segments on the white ring
+      const textRadius = (r_outer + r_inner) / 2;
+      const textColor = '#e59a18';
+
+      // Top arc
+      drawTextAlongArc(
+        ctx,
+        'We are Attending',
+        cx, cy, textRadius,
+        -128 * Math.PI / 180,
+        -52 * Math.PI / 180,
+        true,
+        true,
+        'bold 32px "Poppins", "Inter", sans-serif',
+        textColor,
+        2.2
+      );
+
+      // Left arc
+      drawTextAlongArc(
+        ctx,
+        'BMM Convention',
+        cx, cy, textRadius,
+        222 * Math.PI / 180,
+        138 * Math.PI / 180,
+        false,
+        false,
+        'bold 34px "Poppins", "Inter", sans-serif',
+        textColor,
+        1.4
+      );
+
+      // Right arc
+      drawTextAlongArc(
+        ctx,
+        'Seattle 2026',
+        cx, cy, textRadius,
+        -42 * Math.PI / 180,
+        42 * Math.PI / 180,
+        true,
+        true,
+        'bold 34px "Poppins", "Inter", sans-serif',
+        textColor,
+        1.4
+      );
+
+      // ─── 5. DRAW COLLAGE PHOTOS (Clipped to inner circle) ───
       ctx.save();
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r_inner, 0, Math.PI * 2);
       ctx.clip();
 
       const drawCenterCropped = (img, tx, ty, tw, th) => {
@@ -134,6 +330,8 @@ const GroupCollageCanvas = ({ photos, memberCount, groupName, city, canvasRef })
         ctx.drawImage(img, sx, sy, sw, sh, tx, ty, tw, th);
       };
 
+      // Since the photo collage was originally designed for a larger circle,
+      // we draw it centered in the 800x800 canvas size which perfectly scales inside r_inner!
       if (memberCount === 2) {
         // 2 Members (Left / Right vertical split)
         drawCenterCropped(loadedImages[0], 0, 0, cx, SIZE);
@@ -143,7 +341,7 @@ const GroupCollageCanvas = ({ photos, memberCount, groupName, city, canvasRef })
         ctx.beginPath();
         ctx.moveTo(cx, 0);
         ctx.lineTo(cx, SIZE);
-        ctx.strokeStyle = '#D4AF37';
+        ctx.strokeStyle = '#e59a18';
         ctx.lineWidth = 8;
         ctx.stroke();
 
@@ -159,7 +357,7 @@ const GroupCollageCanvas = ({ photos, memberCount, groupName, city, canvasRef })
         ctx.lineTo(SIZE, cy);
         ctx.moveTo(cx, cy);
         ctx.lineTo(cx, SIZE);
-        ctx.strokeStyle = '#D4AF37';
+        ctx.strokeStyle = '#e59a18';
         ctx.lineWidth = 8;
         ctx.stroke();
 
@@ -176,124 +374,32 @@ const GroupCollageCanvas = ({ photos, memberCount, groupName, city, canvasRef })
         ctx.lineTo(SIZE, cy);
         ctx.moveTo(cx, 0);
         ctx.lineTo(cx, SIZE);
-        ctx.strokeStyle = '#D4AF37';
+        ctx.strokeStyle = '#e59a18';
         ctx.lineWidth = 8;
         ctx.stroke();
       }
 
-      ctx.restore(); // Restore outer circle clip
+      ctx.restore(); // Restore inner circle clip
 
-      // ─── 2. BOTTOM SAFFRON WAVY BANNER ───
-      ctx.save();
-      // Keep inside main circular DP boundary
+      // 6. Draw inner gold border around photo collage
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.clip();
-
-      ctx.beginPath();
-      ctx.moveTo(cx - r, cy + r * 0.45);
-      ctx.bezierCurveTo(cx - r * 0.5, cy + r * 0.35, cx + r * 0.3, cy + r * 0.75, cx + r, cy + r * 0.55);
-      ctx.lineTo(cx + r, cy + r);
-      ctx.lineTo(cx - r, cy + r);
-      ctx.closePath();
-
-      const bannerGrad = ctx.createLinearGradient(cx - r, cy + r * 0.4, cx + r, cy + r);
-      bannerGrad.addColorStop(0, '#C06000'); // deep burnt saffron
-      bannerGrad.addColorStop(0.5, '#F37021'); // vibrant saffron
-      bannerGrad.addColorStop(1, '#D4AF37'); // elegant gold
-      ctx.fillStyle = bannerGrad;
-      ctx.fill();
-
-      // Golden accent curve line
-      ctx.beginPath();
-      ctx.moveTo(cx - r, cy + r * 0.45);
-      ctx.bezierCurveTo(cx - r * 0.5, cy + r * 0.35, cx + r * 0.3, cy + r * 0.75, cx + r, cy + r * 0.55);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3.5;
-      ctx.stroke();
-      ctx.strokeStyle = '#D4AF37';
-      ctx.lineWidth = 1.5;
+      ctx.arc(cx, cy, r_inner + 2, 0, Math.PI * 2);
+      ctx.strokeStyle = '#e59a18';
+      ctx.lineWidth = 5;
       ctx.stroke();
 
-      // Ribbon details: Show Group Name and Seattle WA.
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-      ctx.shadowBlur = 4;
-      ctx.font = 'bold 24px Poppins, sans-serif';
-      ctx.fillText(groupName.toUpperCase(), cx + 80, cy + r * 0.72);
-      
-      ctx.font = '600 18px Inter, sans-serif';
-      ctx.fillStyle = '#FFE28A';
-      ctx.fillText(`BMM 2026 · SEATTLE${city ? ' · ' + city.toUpperCase() : ''}`, cx + 80, cy + r * 0.84);
-      ctx.restore();
-
-      // ─── 3. DYNAMIC PLURAL MARATHI BADGE (Bottom Left) ───
-      const bx = cx - r * 0.44;
-      const by = cy + r * 0.35;
-      const br = 106;
-
-      ctx.save();
-      // Outer white outline border
-      ctx.beginPath();
-      ctx.arc(bx, by, br + 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-      ctx.strokeStyle = '#D4AF37';
-      ctx.lineWidth = 3.5;
-      ctx.stroke();
-
-      // Deep Burnt Saffron Badge Circle
-      ctx.beginPath();
-      ctx.arc(bx, by, br, 0, Math.PI * 2);
-      const badgeGrad = ctx.createLinearGradient(bx - br, by - br, bx + br, by + br);
-      badgeGrad.addColorStop(0, '#B54D00');
-      badgeGrad.addColorStop(1, '#8A0F0F');
-      ctx.fillStyle = badgeGrad;
-      ctx.fill();
-
-      // Inner thin gold border ring
-      ctx.beginPath();
-      ctx.arc(bx, by, br - 7, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 226, 138, 0.85)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Write Marathi Plural text
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ffffff';
-
-      ctx.font = 'bold 23px "Noto Sans Devanagari", sans-serif';
-      ctx.fillText('आम्ही जातोय', bx, by - 32);
-
-      ctx.font = 'bold 23px "Noto Sans Devanagari", sans-serif';
-      ctx.fillText('अधिवेशनाला', bx, by);
-
-      ctx.font = 'bold 17px "Noto Sans Devanagari", sans-serif';
-      ctx.fillStyle = '#FFE28A'; // gold text
-      ctx.fillText('तुम्ही पण येताय ना?', bx, by + 34);
-      ctx.restore();
-
-      // ─── 4. ELEGANT GOLD OUTER FRAME RINGS ───
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = '#D4AF37';
-      ctx.lineWidth = 8;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, r - 4, 0, Math.PI * 2);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
+      // 7. Draw bottom-center golden octagon logo badge
+      const bx = cx;
+      const by = cy + r_inner + 5;
+      const br = 82;
+      drawGoldOctagonBadge(ctx, bx, by, br, logoImg);
     };
   }, [photos, memberCount, groupName, city]);
 
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: '100%', maxWidth: '280px', display: 'block', margin: '0 auto', borderRadius: '50%', border: '2px solid #ddd' }}
+      style={{ width: '100%', maxWidth: '300px', display: 'block', margin: '0 auto', borderRadius: '12px', boxShadow: '0 8px 30px rgba(0,0,0,0.15)' }}
     />
   );
 };
@@ -309,33 +415,103 @@ const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
     canvas.height = SIZE;
 
     const img = new Image();
+    const logoImg = new Image();
+    let imagesLoaded = 0;
 
-    img.onload = () => {
-      document.fonts.ready.then(() => {
-        draw();
-      });
+    const checkDraw = () => {
+      imagesLoaded++;
+      if (imagesLoaded === 2) {
+        document.fonts.ready.then(() => {
+          draw();
+        });
+      }
     };
-    img.onerror = () => {
-      document.fonts.ready.then(() => {
-        draw();
-      });
-    };
+
+    img.onload = checkDraw;
+    img.onerror = checkDraw;
     img.src = photo;
+
+    logoImg.onload = checkDraw;
+    logoImg.onerror = checkDraw;
+    logoImg.src = '/bmm-seattle-logo.png';
 
     const draw = () => {
       ctx.clearRect(0, 0, SIZE, SIZE);
-      ctx.fillStyle = '#ffffff';
+      
+      // 1. Fill entire canvas with orange background
+      ctx.fillStyle = '#f37021';
       ctx.fillRect(0, 0, SIZE, SIZE);
 
-      const cx = SIZE / 2, cy = SIZE / 2, r = SIZE / 2 - 20;
+      const cx = SIZE / 2;
+      const cy = SIZE / 2;
+      const r_outer = 320;
+      const r_inner = 230;
 
-      // ─── 1. DRAW PHOTO (Clipped to main circle) ───
+      // 2. Draw white ring outer fill
+      ctx.beginPath();
+      ctx.arc(cx, cy, r_outer, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // 3. Draw outer gold accent thin border line
+      ctx.beginPath();
+      ctx.arc(cx, cy, r_outer - 3, 0, Math.PI * 2);
+      ctx.strokeStyle = '#e59a18';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // 4. Draw curved text segments on the white ring
+      const textRadius = (r_outer + r_inner) / 2;
+      const textColor = '#e59a18';
+
+      // Top arc
+      drawTextAlongArc(
+        ctx,
+        'I AM ATTENDING',
+        cx, cy, textRadius,
+        -128 * Math.PI / 180,
+        -52 * Math.PI / 180,
+        true,
+        true,
+        'bold 32px "Poppins", "Inter", sans-serif',
+        textColor,
+        2.2
+      );
+
+      // Left arc
+      drawTextAlongArc(
+        ctx,
+        'BMM Convention',
+        cx, cy, textRadius,
+        222 * Math.PI / 180,
+        138 * Math.PI / 180,
+        false,
+        false,
+        'bold 34px "Poppins", "Inter", sans-serif',
+        textColor,
+        1.4
+      );
+
+      // Right arc
+      drawTextAlongArc(
+        ctx,
+        'Seattle 2026',
+        cx, cy, textRadius,
+        -42 * Math.PI / 180,
+        42 * Math.PI / 180,
+        true,
+        true,
+        'bold 34px "Poppins", "Inter", sans-serif',
+        textColor,
+        1.4
+      );
+
+      // 5. Draw user photo cropped to central inner circle
       ctx.save();
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r_inner, 0, Math.PI * 2);
       ctx.clip();
-      
-      // Center cropped draw
+
       if (img.width > 0) {
         const imgRatio = img.width / img.height;
         const targetRatio = 1;
@@ -351,133 +527,32 @@ const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
           sx = 0;
           sy = (img.height - sh) / 2;
         }
-        ctx.drawImage(img, sx, sy, sw, sh, cx - r, cy - r, r * 2, r * 2);
+        ctx.drawImage(img, sx, sy, sw, sh, cx - r_inner, cy - r_inner, r_inner * 2, r_inner * 2);
       } else {
-        // Fallback color
         ctx.fillStyle = '#FFF3E8';
-        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+        ctx.fillRect(cx - r_inner, cy - r_inner, r_inner * 2, r_inner * 2);
       }
-
       ctx.restore();
 
-      // ─── 2. BOTTOM SAFFRON WAVY BANNER ───
-      ctx.save();
-      // Keep inside main circular DP boundary
+      // 6. Draw inner gold border around photo (on top of photo edge)
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.clip();
-
-      ctx.beginPath();
-      ctx.moveTo(cx - r, cy + r * 0.45);
-      ctx.bezierCurveTo(cx - r * 0.5, cy + r * 0.35, cx + r * 0.3, cy + r * 0.75, cx + r, cy + r * 0.55);
-      ctx.lineTo(cx + r, cy + r);
-      ctx.lineTo(cx - r, cy + r);
-      ctx.closePath();
-
-      const bannerGrad = ctx.createLinearGradient(cx - r, cy + r * 0.4, cx + r, cy + r);
-      bannerGrad.addColorStop(0, '#C06000'); // deep burnt saffron
-      bannerGrad.addColorStop(0.5, '#F37021'); // vibrant saffron
-      bannerGrad.addColorStop(1, '#D4AF37'); // elegant gold
-      ctx.fillStyle = bannerGrad;
-      ctx.fill();
-
-      // Golden accent curve line
-      ctx.beginPath();
-      ctx.moveTo(cx - r, cy + r * 0.45);
-      ctx.bezierCurveTo(cx - r * 0.5, cy + r * 0.35, cx + r * 0.3, cy + r * 0.75, cx + r, cy + r * 0.55);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3.5;
-      ctx.stroke();
-      ctx.strokeStyle = '#D4AF37';
-      ctx.lineWidth = 1.5;
+      ctx.arc(cx, cy, r_inner + 2, 0, Math.PI * 2);
+      ctx.strokeStyle = '#e59a18';
+      ctx.lineWidth = 5;
       ctx.stroke();
 
-      // Ribbon details
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-      ctx.shadowBlur = 4;
-      ctx.font = 'bold 24px Poppins, sans-serif';
-      ctx.fillText('BMM 2026 · SEATTLE, WA.', cx + 80, cy + r * 0.72);
-      
-      ctx.font = '600 18px Inter, sans-serif';
-      ctx.fillStyle = '#FFE28A';
-      ctx.fillText('AUGUST 6–9, 2026', cx + 80, cy + r * 0.84);
-      ctx.restore();
-
-      // ─── 3. DYNAMIC GENDER MARATHI BADGE (Bottom Left) ───
-      const bx = cx - r * 0.44;
-      const by = cy + r * 0.35;
-      const br = 106;
-
-      ctx.save();
-      // Outer white outline border
-      ctx.beginPath();
-      ctx.arc(bx, by, br + 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-      ctx.strokeStyle = '#D4AF37';
-      ctx.lineWidth = 3.5;
-      ctx.stroke();
-
-      // Deep Burnt Saffron Badge Circle
-      ctx.beginPath();
-      ctx.arc(bx, by, br, 0, Math.PI * 2);
-      const badgeGrad = ctx.createLinearGradient(bx - br, by - br, bx + br, by + br);
-      badgeGrad.addColorStop(0, '#B54D00'); // rich orange-red
-      badgeGrad.addColorStop(1, '#8A0F0F'); // deep crimson red
-      ctx.fillStyle = badgeGrad;
-      ctx.fill();
-
-      // Inner thin gold border ring
-      ctx.beginPath();
-      ctx.arc(bx, by, br - 7, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 226, 138, 0.85)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Write Marathi Gender text
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ffffff';
-
-      let textLine1 = 'मी जातेय'; // default female
-      if (gender === 'male') {
-        textLine1 = 'मी जातोय';
-      } else if (gender === 'plural') {
-        textLine1 = 'आम्ही जातोय';
-      }
-
-      ctx.font = 'bold 23px "Noto Sans Devanagari", sans-serif';
-      ctx.fillText(textLine1, bx, by - 32);
-
-      ctx.font = 'bold 23px "Noto Sans Devanagari", sans-serif';
-      ctx.fillText('अधिवेशनाला', bx, by);
-
-      ctx.font = 'bold 17px "Noto Sans Devanagari", sans-serif';
-      ctx.fillStyle = '#FFE28A'; // gold text
-      ctx.fillText('तुम्ही पण येताय ना?', bx, by + 34);
-      ctx.restore();
-
-      // ─── 4. ELEGANT GOLD OUTER FRAME RINGS ───
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = '#D4AF37';
-      ctx.lineWidth = 8;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, r - 4, 0, Math.PI * 2);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
+      // 7. Draw bottom-center golden octagon logo badge
+      const bx = cx;
+      const by = cy + r_inner + 5; // centers it perfectly overlapping the white ring & bottom edge of inner circle
+      const br = 82;
+      drawGoldOctagonBadge(ctx, bx, by, br, logoImg, true);
     };
   }, [photo, name, gender]);
 
   return (
     <canvas
       ref={dpRef}
-      style={{ width: '100%', maxWidth: '300px', display: 'block', margin: '0 auto', borderRadius: '50%', boxShadow: '0 8px 30px rgba(0,102,102,0.15)' }}
+      style={{ width: '100%', maxWidth: '300px', display: 'block', margin: '0 auto', borderRadius: '12px', boxShadow: '0 8px 30px rgba(0,0,0,0.15)' }}
     />
   );
 };
