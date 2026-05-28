@@ -30,6 +30,7 @@ const authenticateToken = (req, res, next) => {
 
 // Login Route
 app.post('/api/auth/login', async (req, res) => {
+  console.log(`[API] Received POST /api/auth/login for email: ${req.body?.email}`);
   const { email, password } = req.body;
 
   if (!allowedAdmins.includes(email)) {
@@ -56,7 +57,7 @@ app.post('/api/auth/login', async (req, res) => {
   res.cookie('admin_token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 8 * 60 * 60 * 1000, // 8 hours
     path: '/'
   });

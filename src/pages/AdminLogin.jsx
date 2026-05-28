@@ -23,7 +23,7 @@ export default function AdminLogin() {
         setError(res.message);
       }
     } catch (err) {
-      setError('An error occurred during login');
+      setError(`An error occurred: ${err.message || err.toString()}`);
     } finally {
       setLoading(false);
     }

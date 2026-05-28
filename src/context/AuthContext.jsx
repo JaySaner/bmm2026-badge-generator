@@ -27,17 +27,29 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setUser({ email });
-      return { success: true };
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        return { success: false, message: `Server returned non-JSON (${res.status}): ${text.substring(0, 50)}...` };
+      }
+      
+      if (res.ok) {
+        setUser({ email });
+        return { success: true };
+      }
+      return { success: false, message: data.message || 'Login failed' };
+    } catch (err) {
+      return { success: false, message: `Network error: ${err.message}` };
     }
-    return { success: false, message: data.message || 'Login failed' };
   };
 
   const logout = async () => {
