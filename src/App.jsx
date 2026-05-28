@@ -893,10 +893,30 @@ const PublicApp = ({ forceAdmin = false }) => {
   const posterCanvasRef = useRef(null);
   const groupDpCanvasRef = useRef(null);
 
+  // Load registrations: from API if admin, else from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('bmm_registrations');
-    if (saved) setRegistrations(JSON.parse(saved));
-  }, []);
+    const loadRegistrations = async () => {
+      if (forceAdmin) {
+        // Admin mode: fetch ALL registrations from Supabase via API
+        try {
+          const res = await fetch('/api/registrations', { credentials: 'same-origin' });
+          if (res.ok) {
+            const data = await res.json();
+            setRegistrations(data.registrations || []);
+            return;
+          } else {
+            console.error('API returned non-OK status:', res.status, await res.text());
+          }
+        } catch (err) {
+          console.error('Failed to fetch registrations from API:', err);
+        }
+      }
+      // Fallback: load from localStorage
+      const saved = localStorage.getItem('bmm_registrations');
+      if (saved) setRegistrations(JSON.parse(saved));
+    };
+    loadRegistrations();
+  }, [forceAdmin]);
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
@@ -926,7 +946,7 @@ const PublicApp = ({ forceAdmin = false }) => {
       return;
     }
     setIsGenerating(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       const newReg = {
         ...formData,
         id: `BMM26-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -935,6 +955,18 @@ const PublicApp = ({ forceAdmin = false }) => {
       const updated = [newReg, ...registrations];
       setRegistrations(updated);
       localStorage.setItem('bmm_registrations', JSON.stringify(updated));
+
+      // Save to Supabase via API
+      try {
+        await fetch('/api/registrations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newReg)
+        });
+      } catch (err) {
+        console.error('Failed to save to Supabase:', err);
+      }
+
       setIsGenerating(false);
       setStep('preview');
       confetti({ particleCount: 160, spread: 80, origin: { y: 0.55 }, colors: ['#D4AF37', '#0a1f5c', '#FF9933'] });
@@ -952,7 +984,7 @@ const PublicApp = ({ forceAdmin = false }) => {
       return;
     }
     setIsGenerating(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       const newReg = {
         name: groupFormData.groupName,
         photo: groupFormData.photos[0], // Use first photo as preview in admin
@@ -966,6 +998,18 @@ const PublicApp = ({ forceAdmin = false }) => {
       const updated = [newReg, ...registrations];
       setRegistrations(updated);
       localStorage.setItem('bmm_registrations', JSON.stringify(updated));
+
+      // Save to Supabase via API
+      try {
+        await fetch('/api/registrations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newReg)
+        });
+      } catch (err) {
+        console.error('Failed to save group to Supabase:', err);
+      }
+
       setIsGenerating(false);
       setStep('previewGroup');
       confetti({ particleCount: 160, spread: 80, origin: { y: 0.55 }, colors: ['#D4AF37', '#0a1f5c', '#FF9933'] });
@@ -979,10 +1023,17 @@ const PublicApp = ({ forceAdmin = false }) => {
     link.click();
   };
 
-  const deleteRegistration = (id) => {
+  const deleteRegistration = async (id) => {
     const updated = registrations.filter(r => r.id !== id);
     setRegistrations(updated);
     localStorage.setItem('bmm_registrations', JSON.stringify(updated));
+
+    // Also delete from Supabase via API
+    try {
+      await fetch(`/api/registrations/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+    } catch (err) {
+      console.error('Failed to delete from Supabase:', err);
+    }
   };
 
   return (
