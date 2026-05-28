@@ -1,9 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Download, Upload, User, MapPin, Briefcase, Share2, ArrowLeft, LayoutDashboard, Trash2 } from 'lucide-react';
+import { Download, Upload, User, MapPin, Briefcase, Share2, ArrowLeft, LayoutDashboard, Trash2, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import AdminLogin from './pages/AdminLogin';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Helper to remove solid background color of the logo dynamically (chroma-keying the top-left pixel)
 const removeLogoBackground = (img) => {
@@ -876,8 +880,10 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
 };
 
 // ─── Main App ──────────────────────────────────────────────────────────────────
-const App = () => {
-  const [step, setStep] = useState('form');
+const PublicApp = ({ forceAdmin = false }) => {
+  const [step, setStep] = useState(forceAdmin ? 'admin' : 'form');
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({ name: '', photo: null, city: '', role: 'Attendee', gender: 'female' });
   const [groupFormData, setGroupFormData] = useState({ groupName: '', memberCount: 4, photos: [null, null, null, null], city: '' });
   const [registrations, setRegistrations] = useState([]);
@@ -991,18 +997,43 @@ const App = () => {
           </div>
         </div>
         <nav className="bmm-nav">
-          <button
-            className={`bmm-nav-btn ${step === 'form' || step === 'preview' ? 'active' : ''}`}
-            onClick={() => setStep(formData.name && formData.photo ? 'preview' : 'form')}
-          >Personal DP</button>
-          <button
-            className={`bmm-nav-btn ${step === 'groupForm' || step === 'previewGroup' ? 'active' : ''}`}
-            onClick={() => setStep(groupFormData.groupName && groupFormData.photos.filter(p => p).length >= groupFormData.memberCount ? 'previewGroup' : 'groupForm')}
-          >Group DP</button>
-          <button
-            className={`bmm-nav-btn ${step === 'admin' ? 'active' : ''}`}
-            onClick={() => setStep('admin')}
-          ><LayoutDashboard size={16} /> Admin</button>
+          {!forceAdmin && (
+            <>
+              <button
+                className={`bmm-nav-btn ${step === 'form' || step === 'preview' ? 'active' : ''}`}
+                onClick={() => setStep(formData.name && formData.photo ? 'preview' : 'form')}
+              >Personal DP</button>
+              <button
+                className={`bmm-nav-btn ${step === 'groupForm' || step === 'previewGroup' ? 'active' : ''}`}
+                onClick={() => setStep(groupFormData.groupName && groupFormData.photos.filter(p => p).length >= groupFormData.memberCount ? 'previewGroup' : 'groupForm')}
+              >Group DP</button>
+              {user && (
+                <button
+                  className="bmm-nav-btn"
+                  onClick={() => navigate('/admin/dashboard')}
+                ><LayoutDashboard size={16} /> Admin</button>
+              )}
+            </>
+          )}
+          {forceAdmin && (
+            <>
+              <button
+                className={`bmm-nav-btn ${step === 'admin' ? 'active' : ''}`}
+                onClick={() => setStep('admin')}
+              >
+                <LayoutDashboard size={16} /> Dashboard
+              </button>
+              <button
+                className="bmm-nav-btn"
+                onClick={async () => {
+                  await logout();
+                  navigate('/');
+                }}
+              >
+                <LogOut size={16} /> Logout
+              </button>
+            </>
+          )}
         </nav>
       </header>
 
@@ -1337,9 +1368,37 @@ const App = () => {
       </main>
 
       <footer className="bmm-footer">
-        <p>जपूया संस्कृती, विणूया नाती! &nbsp;·&nbsp; BMM 2026 Seattle &nbsp;·&nbsp; 6–9 August 2026</p>
+        <p>
+          जपूया संस्कृती, विणूया नाती! &nbsp;·&nbsp; BMM 2026 Seattle &nbsp;·&nbsp; 6–9 August 2026
+          {!user && !forceAdmin && (
+            <>
+              &nbsp;·&nbsp; 
+              <span 
+                style={{ cursor: 'pointer', opacity: 0.6, fontSize: '0.9em' }} 
+                onClick={() => navigate('/admin/login')}
+              >
+                Admin
+              </span>
+            </>
+          )}
+        </p>
       </footer>
     </div>
+  );
+};
+
+const App = () => {
+  return (
+    <Routes>
+      <Route path="/" element={<PublicApp />} />
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin/*" element={
+        <ProtectedRoute>
+          <PublicApp forceAdmin={true} />
+        </ProtectedRoute>
+      } />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 };
 
