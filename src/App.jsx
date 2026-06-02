@@ -1148,6 +1148,13 @@ const PublicApp = ({ forceAdmin = false }) => {
                 </div>
               </div>
 
+              <div style={{ padding: '12px 16px', backgroundColor: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, marginTop: 12, fontSize: '12px', color: '#b98800', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '16px' }}>⚠️</span>
+                <div>
+                  <strong>Privacy Disclaimer:</strong> We do not store user photos on our servers. All photos are deleted automatically after the frames are generated to protect your privacy.
+                </div>
+              </div>
+
               <div className="form-two-col">
                 <div className="form-row">
                   <label><MapPin size={15} /> City</label>
@@ -1240,6 +1247,13 @@ const PublicApp = ({ forceAdmin = false }) => {
                   value={groupFormData.city}
                   onChange={e => setGroupFormData(f => ({ ...f, city: e.target.value }))}
                 />
+              </div>
+
+              <div style={{ padding: '12px 16px', backgroundColor: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, marginTop: 12, marginBottom: 24, fontSize: '12px', color: '#b98800', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '16px' }}>⚠️</span>
+                <div>
+                  <strong>Privacy Disclaimer:</strong> We do not store user photos on our servers. All photos are deleted automatically after the frames are generated to protect your privacy.
+                </div>
               </div>
 
               <button className="bmm-btn-primary" onClick={handleGenerateGroup} disabled={isGenerating}>
@@ -1369,13 +1383,6 @@ const PublicApp = ({ forceAdmin = false }) => {
                   a.download = 'BMM2026_Registrations.csv';
                   a.click();
                 }}>Export CSV</button>
-              </div>
-              
-              <div style={{ padding: '12px 16px', backgroundColor: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, marginBottom: 24, fontSize: '14px', color: '#b98800', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: '18px' }}>⚠️</span>
-                <div>
-                  <strong>Privacy Disclaimer:</strong> We do not store user photos on our servers. All photos are deleted automatically after the frames are generated to protect user privacy.
-                </div>
               </div>
               <div style={{ overflowX: 'auto' }}>
                 <table className="admin-table">
