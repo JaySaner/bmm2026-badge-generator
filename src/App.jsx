@@ -856,7 +856,7 @@ const PublicApp = ({ forceAdmin = false }) => {
   const [step, setStep] = useState(forceAdmin ? 'admin' : 'form');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ name: '', photo: null, city: 'Seattle', role: 'Marketing Chair', gender: 'female' });
+  const [formData, setFormData] = useState({ name: '', photo: null, city: '', role: '', gender: 'female' });
   const [groupFormData, setGroupFormData] = useState({ groupName: '', memberCount: 4, photos: [null, null, null, null], city: '' });
   const [registrations, setRegistrations] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
