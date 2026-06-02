@@ -401,7 +401,7 @@ const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
         -52 * Math.PI / 180,
         true,
         true,
-        'bold 34px "Poppins", "Inter", sans-serif',
+        'bold 44px "Poppins", "Inter", sans-serif',
         textColor,
         1.4
       );
@@ -415,7 +415,7 @@ const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
         222 * Math.PI / 180,
         true,
         true,
-        'bold 34px "Poppins", "Inter", sans-serif',
+        'bold 44px "Poppins", "Inter", sans-serif',
         textColor,
         1.4
       );
@@ -429,7 +429,7 @@ const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
         42 * Math.PI / 180,
         true,
         true,
-        'bold 34px "Poppins", "Inter", sans-serif',
+        'bold 44px "Poppins", "Inter", sans-serif',
         textColor,
         1.4
       );
@@ -465,9 +465,11 @@ const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
       // 6. Draw inner gold border around photo (removed to match provided DP)
 
       // 7. Draw bottom-center golden octagon logo badge
+      // by = cy + r_inner + 90 ensures logo top (~641) is below inner circle boundary (630)
+      // br = 75 → half-height ≈ 79px, logo bottom ~799, safely within 800px canvas
       const bx = cx;
-      const by = cy + r_inner + 5; // centers it perfectly overlapping the white ring & bottom edge of inner circle
-      const br = 82;
+      const by = cy + r_inner + 90;
+      const br = 75;
       drawGoldOctagonBadge(ctx, bx, by, br, logoImg, true);
     };
   }, [photo, name, gender]);
@@ -658,16 +660,38 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
       ctx.fillStyle = '#E55934';
       ctx.fillText(name.toUpperCase(), tx, 680);
 
+      let currentY = 715;
+
       if (role) {
         ctx.font = '700 22px Inter, sans-serif';
         ctx.fillStyle = '#0A1F5C'; // dark blue
-        ctx.fillText(role.toUpperCase(), tx, 715);
+        const roleText = role.toUpperCase();
+        const maxWidth = W - tx - 40; // leave some margin on the right
+        const words = roleText.split(' ');
+        let line = '';
+        const lineHeight = 28;
+
+        for (let i = 0; i < words.length; i++) {
+          const testLine = line + words[i] + ' ';
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > maxWidth && i > 0) {
+            ctx.fillText(line, tx, currentY);
+            line = words[i] + ' ';
+            currentY += lineHeight;
+          } else {
+            line = testLine;
+          }
+        }
+        ctx.fillText(line, tx, currentY);
+        currentY += 30; // space before city
+      } else {
+        currentY = 725;
       }
 
       if (city) {
         ctx.font = '600 22px Inter, sans-serif';
         ctx.fillStyle = '#555555'; // dark grey
-        ctx.fillText(city.toUpperCase(), tx, role ? 745 : 725);
+        ctx.fillText(city.toUpperCase(), tx, currentY);
       }
 
       // ─── 1. Tagline Area (Sit between Name/City section and Stats Bar) ───
