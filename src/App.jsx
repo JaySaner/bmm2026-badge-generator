@@ -1127,11 +1127,11 @@ const PublicApp = ({ forceAdmin = false }) => {
               <div className="form-two-col">
                 <div className="form-row">
                   <label><MapPin size={15} /> City</label>
-                  <input type="text" placeholder="e.g. Mumbai" value={formData.city} onChange={e => setFormData(f => ({ ...f, city: e.target.value }))} />
+                  <input type="text" placeholder="e.g. Seattle" value={formData.city} onChange={e => setFormData(f => ({ ...f, city: e.target.value }))} />
                 </div>
                 <div className="form-row">
                   <label><Briefcase size={15} /> Role / Designation</label>
-                  <input type="text" placeholder="e.g. Delegate" value={formData.role} onChange={e => setFormData(f => ({ ...f, role: e.target.value }))} />
+                  <input type="text" placeholder="e.g. Marketing Chair" value={formData.role} onChange={e => setFormData(f => ({ ...f, role: e.target.value }))} />
                 </div>
               </div>
 
