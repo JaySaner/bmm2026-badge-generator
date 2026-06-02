@@ -1370,6 +1370,13 @@ const PublicApp = ({ forceAdmin = false }) => {
                   a.click();
                 }}>Export CSV</button>
               </div>
+              
+              <div style={{ padding: '12px 16px', backgroundColor: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, marginBottom: 24, fontSize: '14px', color: '#b98800', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '18px' }}>⚠️</span>
+                <div>
+                  <strong>Privacy Disclaimer:</strong> We do not store user photos on our servers. All photos are deleted automatically after the frames are generated to protect user privacy.
+                </div>
+              </div>
               <div style={{ overflowX: 'auto' }}>
                 <table className="admin-table">
                   <thead>
