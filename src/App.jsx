@@ -1151,7 +1151,7 @@ const PublicApp = ({ forceAdmin = false }) => {
               <div style={{ padding: '12px 16px', backgroundColor: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, marginTop: 12, fontSize: '12px', color: '#b98800', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: '16px' }}>⚠️</span>
                 <div>
-                  <strong>Privacy Disclaimer:</strong> We do not store user photos on our servers. All photos are deleted automatically after the frames are generated to protect your privacy.
+                  <strong>Disclaimer:</strong> Your photo is processed temporarily and automatically deleted from our servers once the frame is generated. We do not retain any uploaded images.
                 </div>
               </div>
 
@@ -1252,7 +1252,7 @@ const PublicApp = ({ forceAdmin = false }) => {
               <div style={{ padding: '12px 16px', backgroundColor: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, marginTop: 12, marginBottom: 24, fontSize: '12px', color: '#b98800', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: '16px' }}>⚠️</span>
                 <div>
-                  <strong>Privacy Disclaimer:</strong> We do not store user photos on our servers. All photos are deleted automatically after the frames are generated to protect your privacy.
+                  <strong>Disclaimer:</strong> Your photo is processed temporarily and automatically deleted from our servers once the frame is generated. We do not retain any uploaded images.
                 </div>
               </div>
 
