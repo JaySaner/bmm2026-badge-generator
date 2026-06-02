@@ -93,95 +93,24 @@ const drawTextAlongArc = (ctx, text, cx, cy, r, startAngle, endAngle, isClockwis
 
 // Helper to draw a beautifully shaded and layered gold octagon badge at the bottom-center
 const drawGoldOctagonBadge = (ctx, bx, by, br, logoImg, useWhiteLogoBg = false) => {
+  if (!logoImg || logoImg.width === 0) return;
+  
   ctx.save();
   // Drop shadow for depth
   ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
   ctx.shadowBlur = 12;
   ctx.shadowOffsetY = 5;
 
-  // 1. Draw outer gold octagon border
-  ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const angle = (i * Math.PI) / 4 + Math.PI / 8;
-    const x = bx + (br + 4) * Math.cos(angle);
-    const y = by + (br + 4) * Math.sin(angle);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fillStyle = '#d4af37'; // antique gold
-  ctx.fill();
-
-  // 2. Draw outer thin white border
-  ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const angle = (i * Math.PI) / 4 + Math.PI / 8;
-    const x = bx + (br + 1) * Math.cos(angle);
-    const y = by + (br + 1) * Math.sin(angle);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-
-  // 3. Draw inner filled octagon
-  ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const angle = (i * Math.PI) / 4 + Math.PI / 8;
-    const x = bx + br * Math.cos(angle);
-    const y = by + br * Math.sin(angle);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
+  // The uploaded logo is the full badge itself, we just need to remove its white corners
+  const processedLogo = removeLogoBackground(logoImg);
   
-  if (useWhiteLogoBg) {
-    ctx.fillStyle = '#ffffff';
-  } else {
-    const badgeGrad = ctx.createLinearGradient(bx - br, by - br, bx + br, by + br);
-    badgeGrad.addColorStop(0, '#fff4b8'); // bright gold
-    badgeGrad.addColorStop(0.3, '#fbc02d'); // yellow-orange gold
-    badgeGrad.addColorStop(0.7, '#f57f17'); // amber gold
-    badgeGrad.addColorStop(1, '#a85000'); // deep burnt gold
-    ctx.fillStyle = badgeGrad;
-  }
-  ctx.fill();
+  // Width to match the previous badge size
+  const lw = br * 2.1;
+  const lh = lw * (logoImg.height / logoImg.width);
+  const lx = bx - lw / 2;
+  const ly = by - lh / 2;
 
-  // 4. Draw inner thin white accent stroke
-  ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const angle = (i * Math.PI) / 4 + Math.PI / 8;
-    const x = bx + (br - 6) * Math.cos(angle);
-    const y = by + (br - 6) * Math.sin(angle);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  ctx.restore(); // remove shadow for inner drawings
-
-  // 5. Draw logo image inside the badge
-  if (logoImg && logoImg.width > 0) {
-    const processedLogo = removeLogoBackground(logoImg);
-    const lw = br * 1.15; // logo width inside the badge
-    const lh = lw * (logoImg.height / logoImg.width);
-    const lx = bx - lw / 2;
-    const ly = by - lh / 2 - 10; // offset slightly up for text
-    ctx.drawImage(processedLogo, lx, ly, lw, lh);
-  }
-
-  // 6. Draw BMM2026 text at the bottom inside the badge
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#051036'; // dark navy blue
-  ctx.font = '900 13px Inter, sans-serif';
-  ctx.fillText('BMM2026', bx, by + br * 0.65);
+  ctx.drawImage(processedLogo, lx, ly, lw, lh);
   ctx.restore();
 };
 
@@ -442,8 +371,8 @@ const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
     const draw = () => {
       ctx.clearRect(0, 0, SIZE, SIZE);
       
-      // 1. Fill entire canvas with orange background
-      ctx.fillStyle = '#f37021';
+      // 1. Fill entire canvas with background
+      ctx.fillStyle = '#1D6E6B';
       ctx.fillRect(0, 0, SIZE, SIZE);
 
       const cx = SIZE / 2;
@@ -457,40 +386,35 @@ const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
       ctx.fillStyle = '#ffffff';
       ctx.fill();
 
-      // 3. Draw outer gold accent thin border line
-      ctx.beginPath();
-      ctx.arc(cx, cy, r_outer - 3, 0, Math.PI * 2);
-      ctx.strokeStyle = '#e59a18';
-      ctx.lineWidth = 4;
-      ctx.stroke();
+      // 3. Draw outer gold accent thin border line (removed to match provided DP)
 
       // 4. Draw curved text segments on the white ring
       const textRadius = (r_outer + r_inner) / 2;
-      const textColor = '#e59a18';
+      const textColor = '#1D6E6B';
 
       // Top arc
       drawTextAlongArc(
         ctx,
-        'I AM ATTENDING',
+        'BMM Convention',
         cx, cy, textRadius,
         -128 * Math.PI / 180,
         -52 * Math.PI / 180,
         true,
         true,
-        'bold 32px "Poppins", "Inter", sans-serif',
+        'bold 34px "Poppins", "Inter", sans-serif',
         textColor,
-        2.2
+        1.4
       );
 
       // Left arc
       drawTextAlongArc(
         ctx,
-        'BMM Convention',
+        'I am Attending',
         cx, cy, textRadius,
-        222 * Math.PI / 180,
         138 * Math.PI / 180,
-        false,
-        false,
+        222 * Math.PI / 180,
+        true,
+        true,
         'bold 34px "Poppins", "Inter", sans-serif',
         textColor,
         1.4
@@ -538,12 +462,7 @@ const WhatsAppDPCanvas = ({ photo, name, gender, dpRef }) => {
       }
       ctx.restore();
 
-      // 6. Draw inner gold border around photo (on top of photo edge)
-      ctx.beginPath();
-      ctx.arc(cx, cy, r_inner + 2, 0, Math.PI * 2);
-      ctx.strokeStyle = '#e59a18';
-      ctx.lineWidth = 5;
-      ctx.stroke();
+      // 6. Draw inner gold border around photo (removed to match provided DP)
 
       // 7. Draw bottom-center golden octagon logo badge
       const bx = cx;
@@ -573,10 +492,12 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
 
     const img = new Image();
     const logoImg = new Image();
+    const bgImg = new Image();
+    const qrImg = new Image();
     let imagesLoaded = 0;
     const checkDraw = () => {
       imagesLoaded++;
-      if (imagesLoaded === 2) {
+      if (imagesLoaded === 4) {
         document.fonts.ready.then(() => {
           draw();
         });
@@ -591,29 +512,43 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
     logoImg.onerror = checkDraw;
     logoImg.src = '/logo.png';
 
+    bgImg.onload = checkDraw;
+    bgImg.onerror = checkDraw;
+    bgImg.src = '/poster-bg.png';
+
+    qrImg.onload = checkDraw;
+    qrImg.onerror = checkDraw;
+    qrImg.src = '/qr.png';
+
     const draw = () => {
       ctx.clearRect(0, 0, W, H);
 
-      // Background - White
-      ctx.fillStyle = '#ffffff';
+      // 1. Sky Gradient Background
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+      skyGrad.addColorStop(0, '#EAF6FF'); // light sky blue
+      skyGrad.addColorStop(0.5, '#F5FBFF');
+      skyGrad.addColorStop(1, '#FFFFFF'); // white
+      ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, W, H);
 
-      // Subtle dot pattern
-      ctx.fillStyle = '#000000';
-      ctx.globalAlpha = 0.02;
-      for (let x = 0; x < W; x += 30) {
-        for (let y = 0; y < H; y += 30) {
-          ctx.beginPath();
-          ctx.arc(x, y, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      // 2. Subtle Seattle Skyline & Mount Rainier Watermark
+      if (bgImg.width > 0) {
+        ctx.globalAlpha = 0.05; // Faint 5% opacity
+        ctx.drawImage(bgImg, 0, 0, W, H);
+        ctx.globalAlpha = 1.0;
       }
-      ctx.globalAlpha = 1.0;
+
+      // 3. Warm cream tint behind headline area (#FFF8F0)
+      const creamGrad = ctx.createLinearGradient(W * 0.45, 0, W * 0.60, 0);
+      creamGrad.addColorStop(0, 'rgba(255, 248, 240, 0)');
+      creamGrad.addColorStop(1, '#FFF8F0');
+      ctx.fillStyle = creamGrad;
+      ctx.fillRect(W * 0.45, 0, W * 0.55, H);
 
       // Header Section
       if (logoImg.width > 0) {
-        const processedLogo = removeLogoBackground(logoImg);
-        ctx.drawImage(processedLogo, 40, 30, 130, 130 * (logoImg.height / logoImg.width));
+        // Draw the logo directly without color filtering to preserve golden-yellow
+        ctx.drawImage(logoImg, 40, 30, 130, 130 * (logoImg.height / logoImg.width));
       }
 
       ctx.textAlign = 'left';
@@ -641,6 +576,17 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
 
       // Middle Section - Left (Photo)
       const cx = 310, cy = 470, r = 230;
+
+      // Soft blue glow / depth behind the photo
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.shadowColor = 'rgba(17, 102, 204, 0.15)'; // Soft blue glow, not overpowering
+      ctx.shadowBlur = 40;
+      ctx.shadowOffsetY = 0; // centered glow
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
 
       // Outer orange arc
       ctx.beginPath();
@@ -710,12 +656,18 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
       // Name & Details
       ctx.font = '900 40px Poppins, sans-serif';
       ctx.fillStyle = '#E55934';
-      ctx.fillText(name.toUpperCase(), tx, 692);
+      ctx.fillText(name.toUpperCase(), tx, 680);
+
+      if (role) {
+        ctx.font = '700 22px Inter, sans-serif';
+        ctx.fillStyle = '#0A1F5C'; // dark blue
+        ctx.fillText(role.toUpperCase(), tx, 715);
+      }
 
       if (city) {
         ctx.font = '600 22px Inter, sans-serif';
         ctx.fillStyle = '#555555'; // dark grey
-        ctx.fillText(city.toUpperCase(), tx, 735);
+        ctx.fillText(city.toUpperCase(), tx, role ? 745 : 725);
       }
 
       // ─── 1. Tagline Area (Sit between Name/City section and Stats Bar) ───
@@ -737,15 +689,14 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
       const statsH = 130;
       const colors = ['#E55934', '#0A1F5C', '#00664F', '#D4AF37', '#E55934'];
       const stats = [
-        { n: '2,500+', t: 'Attendees' },
+        { n: '2,000+', t: 'Attendees' },
         { n: '54+', t: 'Mandals' },
-        { n: '100+', t: 'Performances' },
-        { n: '10', t: 'Competitions' },
+        { n: '40+', t: 'Hours of', t2: 'Entertainment' },
         { n: '22nd', t: 'Convention' }
       ];
 
-      const bw = W / 5;
-      for (let i = 0; i < 5; i++) {
+      const bw = W / 4;
+      for (let i = 0; i < 4; i++) {
         ctx.fillStyle = colors[i];
         ctx.fillRect(i * bw, statsY, bw, statsH);
 
@@ -757,6 +708,9 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
         ctx.font = '500 18px Inter, sans-serif';
         ctx.fillStyle = '#ffffff'; 
         ctx.fillText(stats[i].t, i * bw + bw / 2, statsY + 98);
+        if (stats[i].t2) {
+          ctx.fillText(stats[i].t2, i * bw + bw / 2, statsY + 118);
+        }
       }
 
       // ─── 3. Social Media & Website Strip (Absolute Last Footer) ──────────
@@ -829,7 +783,7 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
       ctx.textAlign = 'center';
       ctx.fillText('f', fbX, barCy + 1);
 
-      // Instagram (leftmost icon)
+      // Instagram
       const igX = fbX - iconGap;
       ctx.beginPath();
       ctx.arc(igX, barCy, iconR, 0, Math.PI * 2);
@@ -864,6 +818,24 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
       ctx.arc(igX + 4.5, barCy - 4.5, 1, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
+
+      // LinkedIn (leftmost icon)
+      const liX = igX - iconGap;
+      ctx.beginPath();
+      ctx.arc(liX, barCy, iconR, 0, Math.PI * 2);
+      ctx.fillStyle = '#0A66C2';
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px "Arial", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('in', liX, barCy + 5);
+
+      // Draw QR Code to sit safely above the stats bar and within the tagline area
+      if (qrImg.width > 0) {
+        const qrSize = 110;
+        // Positioned perfectly below the Name/City area, avoiding all text
+        ctx.drawImage(qrImg, W - qrSize - 40, 745, qrSize, qrSize);
+      }
 
       // Reset text alignment
       ctx.textAlign = 'left';
