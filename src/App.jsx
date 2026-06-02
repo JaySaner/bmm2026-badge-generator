@@ -856,7 +856,7 @@ const PublicApp = ({ forceAdmin = false }) => {
   const [step, setStep] = useState(forceAdmin ? 'admin' : 'form');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ name: '', photo: null, city: '', role: 'Attendee', gender: 'female' });
+  const [formData, setFormData] = useState({ name: '', photo: null, city: 'Seattle', role: 'Marketing Chair', gender: 'female' });
   const [groupFormData, setGroupFormData] = useState({ groupName: '', memberCount: 4, photos: [null, null, null, null], city: '' });
   const [registrations, setRegistrations] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1074,7 +1074,7 @@ const PublicApp = ({ forceAdmin = false }) => {
                 <label><User size={15} /> Full Name *</label>
                 <input
                   type="text"
-                  placeholder="e.g. Rahul Deshmukh"
+                  placeholder=""
                   value={formData.name}
                   onChange={e => setFormData(f => ({ ...f, name: e.target.value }))}
                 />
