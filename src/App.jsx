@@ -667,22 +667,30 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
         ctx.fillStyle = '#0A1F5C'; // dark blue
         const roleText = role.toUpperCase();
         const maxWidth = W - tx - 40; // leave some margin on the right
-        const words = roleText.split(' ');
+        const tokens = roleText.split(/([ -]+)/).filter(Boolean);
         let line = '';
         const lineHeight = 28;
 
-        for (let i = 0; i < words.length; i++) {
-          const testLine = line + words[i] + ' ';
+        for (let i = 0; i < tokens.length; i++) {
+          const token = tokens[i];
+          const testLine = line + token;
           const metrics = ctx.measureText(testLine);
-          if (metrics.width > maxWidth && i > 0) {
-            ctx.fillText(line, tx, currentY);
-            line = words[i] + ' ';
+          
+          if (metrics.width > maxWidth && line !== '') {
+            ctx.fillText(line.replace(/\s+$/, ''), tx, currentY);
+            if (token.trim() === '') {
+              line = '';
+            } else {
+              line = token;
+            }
             currentY += lineHeight;
           } else {
             line = testLine;
           }
         }
-        ctx.fillText(line, tx, currentY);
+        if (line) {
+          ctx.fillText(line.replace(/\s+$/, ''), tx, currentY);
+        }
         currentY += 30; // space before city
       } else {
         currentY = 725;
