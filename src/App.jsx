@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import AdminLogin from './pages/AdminLogin';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -888,6 +888,7 @@ const PublicApp = ({ forceAdmin = false, fixedRole = null }) => {
   const [step, setStep] = useState(forceAdmin ? 'admin' : 'form');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({ name: '', photo: null, city: '', role: fixedRole || '', gender: 'female' });
   const [groupFormData, setGroupFormData] = useState({ groupName: '', memberCount: 4, photos: [null, null, null, null], city: '' });
   const [registrations, setRegistrations] = useState([]);
@@ -1449,7 +1450,7 @@ const PublicApp = ({ forceAdmin = false, fixedRole = null }) => {
               &nbsp;·&nbsp; 
               <span 
                 style={{ cursor: 'pointer', opacity: 0.6, fontSize: '0.9em' }} 
-                onClick={() => navigate('/admin/login')}
+                onClick={() => navigate('/admin/login', { state: { from: location.pathname } })}
               >
                 Admin
               </span>
