@@ -884,11 +884,11 @@ const SocialPosterCanvas = ({ photo, name, role, city, posterRef }) => {
 };
 
 // ─── Main App ──────────────────────────────────────────────────────────────────
-const PublicApp = ({ forceAdmin = false }) => {
+const PublicApp = ({ forceAdmin = false, fixedRole = null }) => {
   const [step, setStep] = useState(forceAdmin ? 'admin' : 'form');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ name: '', photo: null, city: '', role: '', gender: 'female' });
+  const [formData, setFormData] = useState({ name: '', photo: null, city: '', role: fixedRole || '', gender: 'female' });
   const [groupFormData, setGroupFormData] = useState({ groupName: '', memberCount: 4, photos: [null, null, null, null], city: '' });
   const [registrations, setRegistrations] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -953,6 +953,7 @@ const PublicApp = ({ forceAdmin = false }) => {
     setTimeout(async () => {
       const newReg = {
         ...formData,
+        role: fixedRole || formData.role,
         id: `BMM26-${Math.floor(1000 + Math.random() * 9000)}`,
         date: new Date().toLocaleDateString()
       };
@@ -1170,7 +1171,11 @@ const PublicApp = ({ forceAdmin = false }) => {
                 </div>
                 <div className="form-row">
                   <label><Briefcase size={15} /> Role / Designation</label>
-                  <input type="text" placeholder="e.g. Marketing Chair" value={formData.role} onChange={e => setFormData(f => ({ ...f, role: e.target.value }))} />
+                  {fixedRole ? (
+                    <input type="text" value={fixedRole} disabled style={{ backgroundColor: '#f5f5f5', color: '#666', cursor: 'not-allowed' }} />
+                  ) : (
+                    <input type="text" placeholder="e.g. Marketing Chair" value={formData.role} onChange={e => setFormData(f => ({ ...f, role: e.target.value }))} />
+                  )}
                 </div>
               </div>
 
@@ -1460,6 +1465,7 @@ const App = () => {
   return (
     <Routes>
       <Route path="/" element={<PublicApp />} />
+      <Route path="/attendee" element={<PublicApp fixedRole="Attendee" />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin/*" element={
         <ProtectedRoute>
